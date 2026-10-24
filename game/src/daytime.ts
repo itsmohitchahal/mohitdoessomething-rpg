@@ -32,7 +32,8 @@ export function grade(min: number, indoor = false) {
 }
 
 export function fmt(min: number) {
-  const h24 = Math.floor(min / 60), m = Math.floor(min % 60);
+  // the clock face only moves in 10-minute steps, like Stardew's
+  const h24 = Math.floor(min / 60), m = Math.floor((min % 60) / 10) * 10;
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h}:${String(m).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
