@@ -73,6 +73,7 @@ game.events.on('to-title', () => {
   $('#hud').hidden = true;
   ui.objective(null);
   sfx.ambient(null);
+  sfx.rain(false);
   title.show();
 });
 

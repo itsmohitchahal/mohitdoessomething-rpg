@@ -5,7 +5,7 @@ import { Px } from '../px/paint';
 import { paintGround } from '../px/terrain';
 import { MAPS, objectiveText, mapSize, type MapDef, type Spot } from '../maps';
 import { state, hazeLevel, type MapName } from '../state';
-import { clock, grade, fmt, isNight } from '../daytime';
+import { clock, grade, fmt, isNight, isRainDay } from '../daytime';
 import { input } from '../input';
 import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
@@ -120,13 +120,16 @@ export class World extends Phaser.Scene {
   private tintRect!: Phaser.GameObjects.Rectangle;
   private hazeRect!: Phaser.GameObjects.Rectangle;
   private lamps: Light[] = [];
+  private rainK = 0;
+  private drops: Phaser.GameObjects.Image[] = [];
+  private rainRect!: Phaser.GameObjects.Rectangle;
 
   constructor() { super('World'); }
 
   init(data: { map: MapName; spawn: string }) {
     this.mapName = data.map; this.spawn = data.spawn; this.gen++;
     this.poi = null; this.trail = []; this.locked = false; this.followPaused = false; this.leaving = false; this.extra = {};
-    this.hintObjs = []; this.lamps = []; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
+    this.hintObjs = []; this.lamps = []; this.drops = []; this.rainK = 0; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
   }
 
   create() {
@@ -176,6 +179,9 @@ export class World extends Phaser.Scene {
 
     this.tintRect = this.add.rectangle(0, 0, 10, 10, 0xffffff).setOrigin(0).setDepth(30000).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.hazeRect = this.add.rectangle(0, 0, 10, 10, HAZE, 0).setOrigin(0).setDepth(30001);
+    this.rainRect = this.add.rectangle(0, 0, 10, 10, 0xaeb8d4, 0).setOrigin(0).setDepth(30002).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    if (!m.indoor && isRainDay()) this.rainK = 1;
+    sfx.rain(!m.indoor && isRainDay());
 
     const cam = this.cameras.main;
     cam.startFollow(this.player, true, 0.14, 0.14, 0, 20);
@@ -238,7 +244,31 @@ export class World extends Phaser.Scene {
     this.hazeRect.setPosition(v.x - 4, v.y - 4).setSize(v.width + 8, v.height + 8);
     for (const l of this.lamps) l.img.setAlpha(l.kind === 'indoor' ? l.base + g.lights * 0.35 : l.base * g.lights);
     const night = isNight(clock.min);
-    this.clockEl.innerHTML = `<i class="${night ? 'moon' : 'sun'}"></i>${fmt(clock.min)}`;
+    this.clockEl.innerHTML = `<i class="${isRainDay() ? 'rain' : night ? 'moon' : 'sun'}"></i>${fmt(clock.min)}`;
+  }
+
+  /** Rain overlay for outdoor areas: falling streaks, splashes and a cooler, darker light. */
+  private updateRain(dt: number) {
+    const want = !this.def.indoor && isRainDay();
+    this.rainK = Phaser.Math.Clamp(this.rainK + (want ? dt : -dt) * 0.5, 0, 1);
+    sfx.rain(want);
+    const v = this.cameras.main.worldView;
+    this.rainRect.setPosition(v.x - 4, v.y - 4).setSize(v.width + 8, v.height + 8).setFillStyle(0xaeb8d4, this.rainK * 0.85);
+    if (this.rainK <= 0) { if (this.drops.length) { this.drops.forEach(d => d.destroy()); this.drops = []; } return; }
+    const count = Math.round(Math.min(220, (v.width * v.height) / 2600) * this.rainK);
+    while (this.drops.length < count) {
+      this.drops.push(this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, 'raindrop').setScale(ART).setDepth(30003));
+    }
+    while (this.drops.length > count) this.drops.pop()!.destroy();
+    for (const d of this.drops) {
+      d.x -= 140 * dt; d.y += 820 * dt;
+      if (d.y > v.bottom + 20 || d.x < v.x - 20) { d.y = v.y - Math.random() * 60; d.x = v.x + Math.random() * (v.width + 120); }
+      d.setAlpha(0.7 * this.rainK);
+    }
+    if (Math.random() < this.rainK * dt * 30) {
+      const s = this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, 'dot').setScale(ART * 0.7).setAlpha(0.7).setDepth(30003);
+      this.tweens.add({ targets: s, scaleX: ART * 2.2, scaleY: ART * 0.5, alpha: 0, duration: 260, onComplete: () => s.destroy() });
+    }
   }
 
   block(x: number, y: number, w: number, h: number) {
@@ -302,6 +332,7 @@ export class World extends Phaser.Scene {
     this.def.update?.(this, dt);
     this.updateTarget();
     this.updateLight();
+    this.updateRain(dt);
 
     const near = free ? this.nearest() : null;
     input.setAction(near ? near.label : null);

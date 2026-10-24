@@ -31,6 +31,7 @@ class Sfx {
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       if (this.ambName) { const a = this.ambName; this.ambName = null; this.ambient(a); }
+      if (this.rainWanted) { this.rainWanted = false; this.rain(true); }
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -112,6 +113,39 @@ class Sfx {
   }
 
   /** Looping background sound for a place. */
+  private rainNode: { stop: () => void } | null = null;
+  private rainWanted = false;
+
+  /** Rain layer: steady hiss, a low rumble and scattered drips. Plays on top of the place's ambient sound. */
+  rain(on: boolean) {
+    if (!this.ok) { this.rainWanted = on; return; }
+    if (on === !!this.rainNode) return;
+    if (!on) { this.rainNode!.stop(); this.rainNode = null; return; }
+    const c = this.ctx!, out = c.createGain();
+    out.gain.value = 0; out.gain.setTargetAtTime(1, c.currentTime, 0.8);
+    out.connect(this.master!);
+    const nodes: AudioScheduledSourceNode[] = [];
+    const layer = (type: BiquadFilterType, freq: number, q: number, vol: number) => {
+      const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
+      const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = c.createGain(); g.gain.value = vol;
+      s.connect(f).connect(g).connect(out); s.start(0, Math.random()); nodes.push(s);
+    };
+    layer('bandpass', 2600, 0.4, 0.09);
+    layer('highpass', 6000, 0.7, 0.03);
+    layer('lowpass', 350, 0.7, 0.05);
+    const drips = window.setInterval(() => {
+      if (Math.random() < 0.55) this.noise(0.03, 0.03 + Math.random() * 0.03, 'bandpass', 1800 + Math.random() * 3500, 4);
+    }, 90);
+    this.rainNode = {
+      stop: () => {
+        clearInterval(drips);
+        out.gain.setTargetAtTime(0, c.currentTime, 0.4);
+        setTimeout(() => { nodes.forEach(n => { try { n.stop(); } catch { /* already stopped */ } }); out.disconnect(); }, 1600);
+      }
+    };
+  }
+
   ambient(name: Ambient) {
     if (name === this.ambName) return;
     this.amb?.stop(); this.amb = null; this.ambName = name;

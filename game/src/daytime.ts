@@ -14,7 +14,11 @@ const rgb = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 export const clock = {
   get min() { return state.data.time ?? 450; },
   set min(v: number) { state.data.time = ((v % 1440) + 1440) % 1440; },
-  advance(dt: number) { this.min = this.min + (dt * 1440) / DAY_SECONDS; }
+  advance(dt: number) {
+    const next = (state.data.time ?? 450) + (dt * 1440) / DAY_SECONDS;
+    if (next >= 1440) state.data.day = day() + 1;
+    this.min = next;
+  }
 };
 
 /** Light at a minute of the day: tint as 0xRRGGBB and lamp strength. */
@@ -38,3 +42,7 @@ export function fmt(min: number) {
   return `${h}:${String(m).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
 export const isNight = (min: number) => min < 345 || min >= 1150;
+
+export const day = () => state.data.day ?? 1;
+/** It rains all day, every second day (outdoors only). Adding #rain to the URL forces it on for previewing. */
+export const isRainDay = () => day() % 2 === 0 || location.hash === '#rain';

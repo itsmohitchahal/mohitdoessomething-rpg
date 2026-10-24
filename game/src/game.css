@@ -138,4 +138,5 @@ html,body{margin:0}
 #clock i { width:10px; height:10px; display:block; }
 #clock i.sun { background:#ffc23c; box-shadow:0 0 0 2px #ff9a3c; }
 #clock i.moon { background:#f4ead6; box-shadow:inset -3px -2px 0 #9fb3c8; }
+#clock i.rain { width:12px; background:#cfd8e6; box-shadow:0 3px 0 -1px #7fb6ff, 4px 3px 0 -1px #7fb6ff; }
 @media (max-width:420px){ #objective { max-width:calc(100% - 200px); font-size:12px } }

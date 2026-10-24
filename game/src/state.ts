@@ -8,10 +8,11 @@ export interface SaveData {
   flags: Record<string, boolean>;
   deaths: number;
   time?: number; // minute of the in-game day
+  day?: number;  // in-game day, starting at 1
 }
 
 const KEY = 'mds-save-v1';
-const fresh = (): SaveData => ({ v: 1, map: 'room', spawn: 'wake', flags: {}, deaths: 0, time: 450 });
+const fresh = (): SaveData => ({ v: 1, map: 'room', spawn: 'wake', flags: {}, deaths: 0, time: 450, day: 1 });
 
 export const state = {
   data: fresh(),

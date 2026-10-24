@@ -53,6 +53,10 @@ export class Boot extends Phaser.Scene {
       c.fillStyle = g; c.fillRect(0, 0, 64, 64);
     });
     canvasTex(this, 'dot', 2, 2, c => { c.fillStyle = '#ffffff'; c.fillRect(0, 0, 2, 2); });
+    canvasTex(this, 'raindrop', 2, 6, c => {
+      c.fillStyle = 'rgba(214,232,255,.35)'; c.fillRect(1, 0, 1, 2);
+      c.fillStyle = 'rgba(214,232,255,.8)'; c.fillRect(1, 2, 1, 2); c.fillRect(0, 4, 1, 2);
+    });
 
     ui.setPortraits({
       MOHIT: portrait(MOHIT_FRAMES.talk(), 4, 0, 16),
