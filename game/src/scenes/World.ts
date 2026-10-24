@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
-import { RES } from '../art/raster';
-import { PROPS } from '../art/props';
-import { MAPS, objectiveText, type MapDef, type Spot } from '../maps';
-import { state, colorLevel, type MapName } from '../state';
+import { ART } from '../px/scale';
+import { PIX } from '../px/props';
+import { Px } from '../px/paint';
+import { paintGround } from '../px/terrain';
+import { MAPS, objectiveText, mapSize, type MapDef, type Spot } from '../maps';
+import { state, hazeLevel, type MapName } from '../state';
+import { clock, grade, fmt, isNight } from '../daytime';
 import { input } from '../input';
 import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
@@ -10,18 +13,20 @@ import { sfx } from '../audio';
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
 // walking speed, rising to a jog after ~0.7s of continuous movement
 const WALK = 165, JOG = 240;
+const HAZE = 0xf2dcc6;
 
 type Sprite = Phaser.GameObjects.Sprite;
+type Light = { img: Phaser.GameObjects.Image; kind: 'night' | 'indoor'; base: number };
 
 /** PoiPoi following Mohit along his footsteps, sometimes wandering off. */
 class Follower {
   sprite: Sprite;
   distracted = false;
   private nextDistract: number;
-  private hint?: Phaser.GameObjects.Text;
+  private hint?: Phaser.GameObjects.Image;
 
   constructor(private w: World, x: number, y: number) {
-    this.sprite = w.add.sprite(x, y, 'poi', 'idle').setOrigin(0.5, 0.94).setScale(1 / RES);
+    this.sprite = w.add.sprite(x, y, 'poi', 'idle').setOrigin(0.5, 0.94).setScale(ART);
     this.sprite.play('p-idle');
     this.nextDistract = w.time.now + 14000;
   }
@@ -30,12 +35,11 @@ class Follower {
     const s = this.sprite, p = this.w.player;
     s.setDepth(s.y);
     if (this.distracted) {
-      this.hint?.setPosition(s.x, s.y - 58);
-      if (Phaser.Math.Distance.Between(p.x, p.y, s.x, s.y) < 48) this.rejoin();
+      this.hint?.setPosition(s.x, s.y - 54 + Math.sin(this.w.time.now / 160) * 3);
+      if (Phaser.Math.Distance.Between(p.x, p.y, s.x, s.y) < 50) this.rejoin();
       return;
     }
     if (this.w.followPaused) return;
-    // follow the breadcrumb trail ~46px behind Mohit
     const trail = this.w.trail;
     let tx = s.x, ty = s.y, acc = 0;
     for (let i = trail.length - 1; i > 0; i--) {
@@ -49,18 +53,13 @@ class Follower {
       if (Math.abs(dx) > 0.5) s.setFlipX(dx < 0);
       if (s.anims.currentAnim?.key !== 'p-walk') s.play('p-walk');
     } else if (s.anims.currentAnim?.key === 'p-walk') s.play('p-idle');
-
-    // very independent: every so often he stops to inspect something and has to be collected
     if (partyMoving && state.flag('fed') && !this.w.locked && this.w.time.now > this.nextDistract && Math.random() < dt * 0.25) this.wander();
   }
 
   wander() {
     this.distracted = true;
     this.sprite.play('p-loaf');
-    this.hint = this.w.add.text(this.sprite.x, this.sprite.y - 58, '?', {
-      fontFamily: 'Lilita One', fontSize: '26px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 6, resolution: 3
-    }).setOrigin(0.5).setDepth(10000);
-    this.w.tweens.add({ targets: this.hint, y: '-=6', yoyo: true, repeat: -1, duration: 420 });
+    this.hint = this.w.add.image(this.sprite.x, this.sprite.y - 54, 'pix-spark').setScale(ART).setDepth(26000);
     const what = Phaser.Utils.Array.GetRandom(['a speck of dust', 'a leaf', 'nothing. there is nothing there.', 'his own tail', 'a very interesting crack in the road']);
     ui.toast(`PoiPoi got distracted by something.<small>(${what}) Go back and get him.</small>`, 3600);
     sfx.meow(true);
@@ -88,44 +87,64 @@ export class World extends Phaser.Scene {
   locked = false;
   followPaused = false;
   leaving = false;
-  private gen = 0;
   extra: Record<string, unknown> = {};
-  private cm: Phaser.FX.ColorMatrix | null = null;
-  private sat = colorLevel();
-  private stepT = 0;
-  private marker!: Phaser.GameObjects.Text;
-  private arrow!: Phaser.GameObjects.Text;
-  private pointer = document.querySelector('#pointer') as HTMLElement;
-  private hintObjs: Phaser.GameObjects.Text[] = [];
   facing: 'down' | 'up' | 'side' = 'down';
+  private gen = 0;
+  private cm: Phaser.FX.ColorMatrix | null = null;
+  private haze = hazeLevel();
+  private stepT = 0;
   private moveT = 0;
+  private saveT = 0;
   private lead = { x: 0, y: 0, tx: 0, ty: 0 };
+  private marker!: Phaser.GameObjects.Text;
+  private arrow!: Phaser.GameObjects.Image;
+  private pointer = document.querySelector('#pointer') as HTMLElement;
+  private clockEl = document.querySelector('#clock') as HTMLElement;
+  private hintObjs: Phaser.GameObjects.Image[] = [];
+  private tintRect!: Phaser.GameObjects.Rectangle;
+  private hazeRect!: Phaser.GameObjects.Rectangle;
+  private lamps: Light[] = [];
 
   constructor() { super('World'); }
 
   init(data: { map: MapName; spawn: string }) {
     this.mapName = data.map; this.spawn = data.spawn; this.gen++;
     this.poi = null; this.trail = []; this.locked = false; this.followPaused = false; this.leaving = false; this.extra = {};
-    this.hintObjs = []; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
+    this.hintObjs = []; this.lamps = []; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
   }
 
   create() {
     const m = this.def = MAPS[this.mapName];
-    this.physics.world.setBounds(0, 0, m.w, m.h);
+    const { w: mw, h: mh } = mapSize(m);
+    this.physics.world.setBounds(0, 0, mw, mh);
     this.cameras.main.setBackgroundColor('#140d1f');
-    const g = this.add.graphics().setDepth(-10000);
-    m.draw(g, this);
+
+    const gkey = 'ground-' + this.mapName;
+    if (!this.textures.exists(gkey)) {
+      const g = paintGround(m.tiles, this.mapName.length * 97 + 13);
+      m.decorate?.(g);
+      this.textures.addCanvas(gkey, g.cv);
+    }
+    this.add.image(0, 0, gkey).setOrigin(0).setScale(ART).setDepth(-10000);
+    if (m.wires) {
+      const wkey = 'wires-' + this.mapName;
+      if (!this.textures.exists(wkey)) {
+        const p = new Px(mw / ART, mh / ART);
+        m.wires.forEach(([x0, y0, x1, y1, drop]) => p.sag(x0, y0, x1, y1, drop, '#2b2430'));
+        this.textures.addCanvas(wkey, p.cv);
+      }
+      this.add.image(0, 0, wkey).setOrigin(0).setScale(ART).setDepth(25000).setAlpha(0.9);
+    }
 
     this.walls = this.physics.add.staticGroup();
-    if (m.wall) this.block(0, 0, m.w, m.wall + 8);
+    if (m.wall) this.block(0, 0, mw, m.wall + 8);
     for (const p of m.props) this.prop(p.key, p.x, p.y, p.wall, p.floor);
     for (const b of m.blocks ?? []) this.block(...b);
+    for (const [x, y, c, r] of m.lights ?? []) this.addLight(x, y, c, r, 'indoor');
 
     const [sx, sy] = m.spawns[this.spawn] ?? Object.values(m.spawns)[0];
-    this.player = this.physics.add.sprite(sx, sy, 'mohit', 'idle').setOrigin(0.5, 0.97).setScale(1 / RES);
-    const fw = this.player.frame.width, fh = this.player.frame.height;
-    this.player.body!.setSize(22 * RES, 9 * RES);
-    (this.player.body as Phaser.Physics.Arcade.Body).setOffset((fw - 22 * RES) / 2, fh * 0.97 - 10 * RES);
+    this.player = this.physics.add.sprite(sx, sy, 'mohit', 'idle').setOrigin(0.5, 0.985).setScale(ART);
+    (this.player.body as Phaser.Physics.Arcade.Body).setSize(8, 4).setOffset(8, 27);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.walls);
     this.player.play('m-idle');
@@ -134,19 +153,19 @@ export class World extends Phaser.Scene {
     if (state.flag('fed') && m.poiAllowed !== false) this.addPoi(sx - 34, sy + 2);
 
     this.marker = this.add.text(0, 0, '!', {
-      fontFamily: 'Lilita One', fontSize: '22px', color: '#ffffff', stroke: '#1b1325', strokeThickness: 6, resolution: 3
-    }).setOrigin(0.5).setDepth(10001).setVisible(false);
-    this.tweens.add({ targets: this.marker, scale: 1.2, yoyo: true, repeat: -1, duration: 380 });
-    this.arrow = this.add.text(0, 0, '▼', {
-      fontFamily: 'Lilita One', fontSize: '30px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 7, resolution: 3
-    }).setOrigin(0.5, 1).setDepth(10003).setVisible(false);
+      fontFamily: '"Pixelify Sans", monospace', fontSize: '24px', color: '#ffffff', stroke: '#2b2430', strokeThickness: 6
+    }).setOrigin(0.5).setDepth(26001).setVisible(false);
+    this.arrow = this.add.image(0, 0, 'pix-arrow').setOrigin(0.5, 1).setScale(ART).setDepth(26003).setVisible(false);
     this.events.once('shutdown', () => { this.pointer.hidden = true; });
+
+    this.tintRect = this.add.rectangle(0, 0, 10, 10, 0xffffff).setOrigin(0).setDepth(30000).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    this.hazeRect = this.add.rectangle(0, 0, 10, 10, HAZE, 0).setOrigin(0).setDepth(30001);
 
     const cam = this.cameras.main;
     cam.startFollow(this.player, true, 0.14, 0.14, 0, 20);
     if (this.renderer.type === Phaser.WEBGL) {
       this.cm = cam.postFX.addColorMatrix();
-      this.applySat(this.sat = colorLevel());
+      this.applyHaze(this.haze = hazeLevel());
     }
     this.fit();
     this.scale.on('resize', this.fit, this);
@@ -159,6 +178,7 @@ export class World extends Phaser.Scene {
 
     m.setup?.(this);
     if (m.hints?.()) this.showHints();
+    this.updateLight();
     if (m.enter) this.cutscene(() => m.enter!(this));
   }
 
@@ -166,23 +186,43 @@ export class World extends Phaser.Scene {
   fit() {
     const cam = this.cameras.main, dpr = DPR();
     const cssW = this.scale.width / dpr, cssH = this.scale.height / dpr;
-    // indoors on a tall phone, zoom in so the room fills more of the screen (the camera scrolls sideways)
-    const m0 = this.def;
-    const roomFill = m0.wall ? (cssH * 0.6) / m0.h : 0;
+    const { w: mw, h: mh } = mapSize(this.def);
+    const roomFill = this.def.indoor ? (cssH * 0.6) / mh : 0;
     const z = Phaser.Math.Clamp(Math.max(Math.min(cssW, cssH) / 440, roomFill), 1, 1.6);
     cam.setZoom(z * dpr);
-    const vw = cssW / z, vh = cssH / z, m = this.def;
-    const bx = vw > m.w ? (m.w - vw) / 2 : 0, by = vh > m.h ? (m.h - vh) / 2 : 0;
-    cam.setBounds(bx, by, Math.max(m.w, vw), Math.max(m.h, vh));
+    const vw = cssW / z, vh = cssH / z;
+    const bx = vw > mw ? (mw - vw) / 2 : 0, by = vh > mh ? (mh - vh) / 2 : 0;
+    cam.setBounds(bx, by, Math.max(mw, vw), Math.max(mh, vh));
   }
 
-  applySat(v: number) { if (this.cm) { this.cm.reset(); this.cm.saturate(v); } }
+  /** Haze desaturates a little and lays a soft peach veil over everything. */
+  applyHaze(v: number) {
+    if (this.cm) { this.cm.reset(); this.cm.saturate(-0.42 * v); }
+    this.hazeRect?.setFillStyle(HAZE, (this.def.indoor ? 0.08 : 0.2) * v);
+  }
 
-  /** Slowly brings a little more colour into the world. */
+  /** Slowly lifts a little of the haze. */
   recolor() {
-    const to = colorLevel(), obj = { v: this.sat };
-    this.tweens.add({ targets: obj, v: to, duration: 3500, ease: 'Sine.easeInOut', onUpdate: () => this.applySat(obj.v) });
-    this.sat = to;
+    const to = hazeLevel(), obj = { v: this.haze };
+    this.tweens.add({ targets: obj, v: to, duration: 3500, ease: 'Sine.easeInOut', onUpdate: () => this.applyHaze(obj.v) });
+    this.haze = to;
+  }
+
+  addLight(x: number, y: number, color: string, radius: number, kind: 'night' | 'indoor') {
+    const img = this.add.image(x, y, 'glow').setTint(Phaser.Display.Color.HexStringToColor(color).color)
+      .setBlendMode(Phaser.BlendModes.ADD).setDisplaySize(radius * 2, radius * 2).setDepth(31000).setAlpha(0);
+    this.lamps.push({ img, kind, base: kind === 'indoor' ? 0.32 : 0.75 });
+  }
+
+  /** Time-of-day tint, lamps and the HUD clock. */
+  private updateLight() {
+    const cam = this.cameras.main, v = cam.worldView;
+    const g = grade(clock.min, this.def.indoor);
+    this.tintRect.setPosition(v.x - 4, v.y - 4).setSize(v.width + 8, v.height + 8).setFillStyle(g.tint);
+    this.hazeRect.setPosition(v.x - 4, v.y - 4).setSize(v.width + 8, v.height + 8);
+    for (const l of this.lamps) l.img.setAlpha(l.kind === 'indoor' ? l.base + g.lights * 0.35 : l.base * g.lights);
+    const night = isNight(clock.min);
+    this.clockEl.innerHTML = `<i class="${night ? 'moon' : 'sun'}"></i>${fmt(clock.min)}`;
   }
 
   block(x: number, y: number, w: number, h: number) {
@@ -193,9 +233,12 @@ export class World extends Phaser.Scene {
   }
 
   prop(key: string, x: number, y: number, wall = false, floor = false) {
-    const art = PROPS[key];
-    const img = this.add.image(x, y, 'prop-' + key).setOrigin(0.5, 1).setScale(1 / RES).setDepth(floor ? -9000 : wall ? -5000 + y : y);
-    if (art.foot && !wall && !floor) this.block(x + art.foot[0], y + art.foot[1], art.foot[2], art.foot[3]);
+    const art = PIX[key];
+    const img = this.add.image(x, y, 'pix-' + key).setOrigin(0.5, 1).setScale(ART).setDepth(floor ? -9000 : wall ? -5000 + y : y);
+    if (art.foot && !wall && !floor) this.block(x + art.foot[0] * ART, y + art.foot[1] * ART, art.foot[2] * ART, art.foot[3] * ART);
+    for (const [gx, gy, c] of art.glow ?? []) {
+      this.addLight(x - (art.w * ART) / 2 + gx * ART, y - art.h * ART + gy * ART, c, this.def.indoor ? 60 : 70, 'night');
+    }
     return img;
   }
 
@@ -209,7 +252,8 @@ export class World extends Phaser.Scene {
     const p = this.player;
     const body = p.body as Phaser.Physics.Arcade.Body;
     let moving = false;
-    if (!this.locked && !ui.busy && !this.leaving) {
+    const free = !this.locked && !ui.busy && !this.leaving;
+    if (free) {
       const mv = input.move, mag = Math.hypot(mv.x, mv.y);
       moving = mag > 0.05;
       if (moving) {
@@ -224,18 +268,14 @@ export class World extends Phaser.Scene {
         this.stepT -= dt * (1 + jog * 0.5);
         if (this.stepT <= 0) { sfx.step(); this.stepT = 0.3; if (jog > 0.5) this.puff(p.x, p.y); }
         this.lead.tx = mv.x * 46; this.lead.ty = mv.y * 34;
-      } else {
-        this.stop();
-      }
-    } else if (!this.locked) {
-      this.stop();
-    }
+      } else this.stop();
+      clock.advance(dt);
+      if ((this.saveT += dt) > 10) { this.saveT = 0; state.save(); }
+    } else if (!this.locked) this.stop();
     p.setDepth(p.y);
-    // the camera drifts slightly ahead of where Mohit is walking
     const k = Math.min(1, dt * 2.2);
     this.lead.x += (this.lead.tx - this.lead.x) * k; this.lead.y += (this.lead.ty - this.lead.y) * k;
     this.cameras.main.setFollowOffset(-this.lead.x, 20 - this.lead.y);
-    this.updateTarget();
 
     const last = this.trail[this.trail.length - 1];
     if (!last || Phaser.Math.Distance.Between(last.x, last.y, p.x, p.y) > 2) {
@@ -244,12 +284,13 @@ export class World extends Phaser.Scene {
     }
     this.poi?.update(dt, moving);
     this.def.update?.(this, dt);
+    this.updateTarget();
+    this.updateLight();
 
-    // nearest thing to interact with
-    const near = (!this.locked && !ui.busy && !this.leaving) ? this.nearest() : null;
+    const near = free ? this.nearest() : null;
     input.setAction(near ? near.label : null);
     if (near) {
-      this.marker.setVisible(true).setPosition(p.x, p.y - 88);
+      this.marker.setVisible(true).setPosition(p.x, p.y - 112);
       if (input.consumeA()) this.cutscene(() => near.run(this));
     } else {
       this.marker.setVisible(false);
@@ -277,8 +318,8 @@ export class World extends Phaser.Scene {
 
   private puff(x: number, y: number) {
     for (let i = 0; i < 2; i++) {
-      const c = this.add.circle(x + Phaser.Math.Between(-8, 8), y - 2, Phaser.Math.Between(3, 5), 0xffffff, 0.55).setDepth(y - 1);
-      this.tweens.add({ targets: c, y: y - 10, scale: 0.2, alpha: 0, duration: 420, onComplete: () => c.destroy() });
+      const c = this.add.image(x + Phaser.Math.Between(-9, 9), y - 3, 'dot').setScale(ART).setAlpha(0.7).setDepth(y - 1);
+      this.tweens.add({ targets: c, y: y - 12, alpha: 0, duration: 420, onComplete: () => c.destroy() });
     }
   }
 
@@ -286,9 +327,7 @@ export class World extends Phaser.Scene {
   showHints() {
     for (const s of this.def.spots) {
       if (s.door) continue;
-      const t = this.add.text(s.x, s.y - 50, '✦', {
-        fontFamily: 'Lilita One', fontSize: '20px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 5, resolution: 3
-      }).setOrigin(0.5).setDepth(10000);
+      const t = this.add.image(s.x, s.y - 54, 'pix-spark').setScale(ART).setDepth(26000);
       this.tweens.add({ targets: t, y: t.y - 7, alpha: 0.55, yoyo: true, repeat: -1, duration: 620, delay: Phaser.Math.Between(0, 400) });
       this.hintObjs.push(t);
     }
@@ -299,7 +338,7 @@ export class World extends Phaser.Scene {
   private updateTarget() {
     const t = this.locked || ui.busy ? null : this.def.target?.() ?? null;
     if (!t) { this.arrow.setVisible(false); this.pointer.hidden = true; return; }
-    this.arrow.setVisible(true).setPosition(t[0], t[1] + Math.sin(this.time.now / 180) * 5);
+    this.arrow.setVisible(true).setPosition(t[0], t[1] + Math.round(Math.sin(this.time.now / 180) * 2) * ART);
     const cam = this.cameras.main, v = cam.worldView;
     if (t[0] > v.x + 20 && t[0] < v.right - 20 && t[1] > v.y + 30 && t[1] < v.bottom - 20) { this.pointer.hidden = true; return; }
     const dpr = DPR(), z = cam.zoom / dpr, cssW = this.scale.width / dpr, cssH = this.scale.height / dpr;
@@ -351,16 +390,16 @@ export class World extends Phaser.Scene {
     }));
   }
 
-  emote(s: Phaser.GameObjects.Sprite | { x: number; y: number }, text: string, color = '#ffffff', dy = 84) {
+  emote(s: Phaser.GameObjects.Sprite | { x: number; y: number }, text: string, color = '#ffffff', dy = 116) {
     const t = this.add.text(s.x, s.y - dy, text, {
-      fontFamily: 'Lilita One', fontSize: '28px', color, stroke: '#1b1325', strokeThickness: 7, resolution: 3
-    }).setOrigin(0.5).setDepth(10002).setScale(0.3);
+      fontFamily: '"Pixelify Sans", monospace', fontSize: '26px', color, stroke: '#2b2430', strokeThickness: 6
+    }).setOrigin(0.5).setDepth(26002).setScale(0.3);
     this.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, y: t.y - 14, delay: 1100, duration: 400, onComplete: () => t.destroy() });
   }
 
-  float(x: number, y: number, key: string, frame?: string, scale = 1) {
-    const i = this.add.image(x, y, key, frame).setScale(scale / RES).setDepth(10002);
+  float(x: number, y: number, key: string, scale = 1) {
+    const i = this.add.image(x, y, key).setScale(ART * scale).setDepth(26002);
     this.tweens.add({ targets: i, y: y - 30, alpha: 0, duration: 1100, ease: 'Sine.easeOut', onComplete: () => i.destroy() });
   }
 
@@ -372,6 +411,7 @@ export class World extends Phaser.Scene {
     this.leaving = true;
     input.setAction(null);
     sfx.door();
+    state.save();
     this.cameras.main.fadeOut(260, 20, 13, 31);
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart({ map, spawn }));
   }

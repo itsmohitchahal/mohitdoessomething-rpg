@@ -1,13 +1,15 @@
-// Chapter 1 maps and story beats.
+// Chapter 1 maps and story beats. World units: one 16px tile = 48 units (art is drawn at 3x).
 import Phaser from 'phaser';
 import type { World } from './scenes/World';
-import { RES } from './art/raster';
 import { state, type MapName } from './state';
 import { ui, hi } from './ui';
 import { sfx } from './audio';
+import { type Px, INK } from './px/paint';
+import { ART } from './px/scale';
 
-type G = Phaser.GameObjects.Graphics;
 type Ambient = 'wind' | 'drone' | 'gym' | 'hum' | null;
+const T = 48;
+const MAT = '#b5743f';
 
 export interface Spot {
   x: number; y: number; r: number;
@@ -17,20 +19,23 @@ export interface Spot {
   run: (w: World) => Promise<void>;
 }
 export interface MapDef {
-  w: number; h: number;
-  wall?: number;                        // interior back-wall height (not walkable)
+  tiles: string[];
+  wall?: number;                                      // height of the back wall in world units (not walkable)
+  indoor?: boolean;
   ambient: Ambient;
-  draw: (g: G, w: World) => void;
+  decorate?: (p: Px) => void;                         // extra ground details in art pixels
+  wires?: [number, number, number, number, number][]; // overhead cables: x0, y0, x1, y1, sag (art px)
   props: { key: string; x: number; y: number; wall?: boolean; floor?: boolean }[];
   blocks?: [number, number, number, number][];
+  lights?: [number, number, string, number][];        // indoor light pools: x, y, colour, radius
   spawns: Record<string, [number, number]>;
   spots: Spot[];
   poiAllowed?: boolean;
   setup?: (w: World) => void;
   enter?: (w: World) => Promise<void>;
   update?: (w: World, dt: number) => void;
-  hints?: () => boolean;                       // sparkle over everything you can look at
-  target?: () => [number, number] | null;      // arrow over the next place to go
+  hints?: () => boolean;
+  target?: () => [number, number] | null;
 }
 
 const f = (k: string) => state.flag(k);
@@ -52,7 +57,7 @@ export function objectiveText(): string | null {
 /** A door: walks you to another map, unless PoiPoi has wandered off. */
 function door(x: number, y: number, to: MapName, spawn: string, label: string, check?: (w: World) => Promise<boolean>): Spot {
   return {
-    x, y, r: 42, label, door: true,
+    x, y, r: 44, label, door: true,
     run: async w => {
       if (w.poi?.distracted) { await w.say(M("Wait. Where's PoiPoi?")); return; }
       if (check && !(await check(w))) return;
@@ -60,8 +65,8 @@ function door(x: number, y: number, to: MapName, spawn: string, label: string, c
     }
   };
 }
-const look = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], extra?: () => void, label = 'Look'): Spot =>
-  ({ x, y, r, label, run: async w => { extra?.(); await w.say(lines); } });
+const look = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], label = 'Look'): Spot =>
+  ({ x, y, r, label, run: async w => { await w.say(lines); } });
 
 /* ---------- gym: looking at anything turns up the café keys ---------- */
 async function foundKeys(w: World) {
@@ -79,25 +84,10 @@ const gymLook = (x: number, y: number, r: number, lines: Parameters<World['say']
   run: async w => { await w.say(lines); if (!f('gymSearched')) await foundKeys(w); }
 });
 
-/* ---------- ground painters ---------- */
-function checker(g: G, x: number, y: number, w: number, h: number, a: number, b: number, s: number) {
-  for (let yy = 0; yy * s < h; yy++) for (let xx = 0; xx * s < w; xx++) {
-    g.fillStyle((xx + yy) % 2 ? a : b).fillRect(x + xx * s, y + yy * s, Math.min(s, w - xx * s), Math.min(s, h - yy * s));
-  }
-}
-function backWall(g: G, w: number, h: number, color: number, trim: number) {
-  g.fillStyle(color).fillRect(0, 0, w, h);
-  g.fillStyle(trim).fillRect(0, h - 10, w, 10);
-  g.lineStyle(3, 0x1b1325).lineBetween(0, h - 10, w, h - 10).lineBetween(0, h, w, h);
-}
-function mat(g: G, x: number, y: number) {
-  g.fillStyle(0xc98a5a).fillRoundedRect(x - 32, y - 8, 64, 16, 4);
-  g.lineStyle(2.5, 0x1b1325).strokeRoundedRect(x - 32, y - 8, 64, 16, 4);
-}
-
 /* ---------- the paper bag in the kitchen ---------- */
+const BAG_X = 250, BAG_Y = 250;
 function kitchenBag(w: World) {
-  const bag = w.add.sprite(250, 226, 'bag', 'idle').setOrigin(0.5, 0.97).setScale(1 / RES).setDepth(226);
+  const bag = w.add.sprite(BAG_X, BAG_Y, 'bag', 'idle').setOrigin(0.5, 0.95).setScale(ART).setDepth(BAG_Y);
   w.extra.bag = bag;
   const wobble = () => {
     if (!bag.active) return;
@@ -108,8 +98,7 @@ function kitchenBag(w: World) {
     });
   };
   w.time.delayedCall(600, wobble);
-  const dark = w.add.rectangle(0, 0, 480, 390, 0x140d1f, 0.32).setOrigin(0).setDepth(9000);
-  w.extra.dark = dark;
+  w.extra.dark = w.add.rectangle(0, 0, 480, 384, 0x140d1f, 0.34).setOrigin(0).setDepth(9000);
 }
 
 async function confront(w: World) {
@@ -120,13 +109,10 @@ async function confront(w: World) {
   sfx.stinger(); w.shake(420, 0.012); w.flash(220);
   await ui.banner('CONFRONTATION!', 'danger', 1300);
   await w.battle();
-  // the battle ends with PoiPoi joining; back in the kitchen
-  const bx = bag.x, by = bag.y;
   bag.destroy();
-  const dark = w.extra.dark as Phaser.GameObjects.Rectangle;
-  w.tweens.add({ targets: dark, alpha: 0, duration: 1200 });
-  w.prop('bagdown', 392, 252, false).setDepth(252);
-  const poi = w.addPoi(bx, by);
+  w.tweens.add({ targets: w.extra.dark as Phaser.GameObjects.Rectangle, alpha: 0, duration: 1200 });
+  w.prop('bagdown', 392, 262, false, true);
+  const poi = w.addPoi(BAG_X, BAG_Y);
   w.followPaused = true;
   poi.sprite.setFlipX(w.player.x < poi.sprite.x).play('p-loaf');
   sfx.ambient('hum');
@@ -142,18 +128,18 @@ async function feed(w: World) {
   s.setFlipX(p.x < s.x);
   p.setFlipX(p.x > s.x);
   await w.say([M('You seem hungry.'), M("I'll make you something to eat.")]);
-  await w.walk(p, 170, 178);
-  sfx.rustle(); w.emote({ x: 160, y: 140 }, '♪', '#ffc23c', 70);
+  await w.walk(p, 160, 168);
+  sfx.rustle(); w.emote({ x: 160, y: 120 }, '♪', '#ffc23c', 30);
   await w.wait(700);
   await w.say(['Mohit boils some plain chicken.', `No salt. No ${hi('masala', 'spices')}. Cat-safe.`]);
   await w.walk(p, s.x + 82, s.y + 4);
   s.setFlipX(false); p.setFlipX(true);
-  const bowl = w.add.image(s.x + 40, s.y + 4, 'bowl').setOrigin(0.5, 1).setScale(1 / RES).setDepth(s.y + 4);
+  const bowl = w.add.image(s.x + 36, s.y + 4, 'pix-bowl').setOrigin(0.5, 1).setScale(ART).setDepth(s.y + 4);
   sfx.heart();
   s.play('p-eat');
-  for (let i = 0; i < 5; i++) { sfx.nom(); w.emote({ x: s.x + 18, y: s.y }, 'nom', '#ffffff', 60); await w.wait(380); }
+  for (let i = 0; i < 5; i++) { sfx.nom(); w.emote({ x: s.x + 18, y: s.y }, 'nom', '#ffffff', 50); await w.wait(380); }
   s.play('p-loaf');
-  w.float(s.x, s.y - 50, 'heart', undefined, 1.2); sfx.heart();
+  w.float(s.x, s.y - 50, 'pix-heart', 1.4); sfx.heart();
   w.tweens.add({ targets: bowl, alpha: 0, delay: 600, duration: 500, onComplete: () => bowl.destroy() });
   await w.wait(500);
   await w.say(M('Hey... do you know why everyone disappeared?'));
@@ -192,71 +178,71 @@ async function chapterEnd(w: World) {
   if (c === 'title') w.game.events.emit('to-title');
 }
 
+/* ---------- city layout ---------- */
+function cityTiles(): string[] {
+  const rows: string[] = [];
+  for (let y = 0; y < 24; y++) {
+    let row = '';
+    for (let x = 0; x < 32; x++) {
+      let c = 'p';
+      const hRoad = y === 11 || y === 12, vRoad = x === 15 || x === 16;
+      if (hRoad || vRoad) c = 'r';
+      else if (y === 10 || y === 13 || x === 14 || x === 17) c = 'f';
+      else if (x >= 18 && y >= 14) c = (y === 18 || x === 24) ? 'k' : 'g';
+      if (hRoad && (x === 13 || x === 18)) c = 'Z';
+      if (vRoad && (y === 9 || y === 14)) c = 'z';
+      row += c;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+const POLES: [number, number][] = [[168, 500], [600, 500], [930, 500], [1310, 500], [260, 650], [1010, 650]];
+const poleTop = ([x, y]: [number, number]): [number, number] => [Math.round(x / ART) + 2, Math.round((y - 258) / ART)];
+
+function cityWires(): [number, number, number, number, number][] {
+  const top = POLES.slice(0, 4).map(poleTop), bot = POLES.slice(4).map(poleTop);
+  const out: [number, number, number, number, number][] = [];
+  for (let i = 0; i < top.length - 1; i++) {
+    const [a, b] = [top[i], top[i + 1]];
+    out.push([a[0], a[1], b[0], b[1], 10], [a[0], a[1] + 2, b[0], b[1] + 3, 16], [a[0] - 1, a[1] + 4, b[0], b[1] + 1, 22]);
+  }
+  out.push([top[1][0], top[1][1], bot[0][0], bot[0][1], 8], [top[2][0], top[2][1] + 2, bot[1][0], bot[1][1], 10]);
+  out.push([0, 70, top[0][0], top[0][1], 12], [top[3][0], top[3][1], 512, 60, 14], [top[3][0], top[3][1] + 3, 512, 90, 9]);
+  out.push([top[1][0], top[1][1] + 1, 150, 46, 6], [top[0][0], top[0][1] + 2, 110, 50, 5]);
+  return out;
+}
+
 /* ---------- the maps ---------- */
 export const MAPS: Record<MapName, MapDef> = {
   room: {
-    w: 460, h: 390, wall: 118, ambient: null, poiAllowed: true,
-    draw(g, w) {
-      w.add.tileSprite(0, 0, 460, 108, 'tex-wallpaper').setOrigin(0).setTileScale(0.5).setDepth(-10001);
-      w.add.tileSprite(0, 120, 460, 270, 'tex-wood').setOrigin(0).setTileScale(0.5).setDepth(-10001);
-      g.fillStyle(0x3b2b58).fillRect(0, 0, 460, 9);
-      g.lineStyle(2, 0x1b1325).lineBetween(0, 9, 460, 9);
-      g.fillStyle(0x6b4434).fillRect(0, 106, 460, 14);
-      g.fillStyle(0x8a5a44).fillRect(0, 106, 460, 3);
-      g.lineStyle(3, 0x1b1325).lineBetween(0, 106, 460, 106).lineBetween(0, 120, 460, 120);
-      w.add.image(0, 120, 'wall-shade').setOrigin(0).setDisplaySize(460, 30).setDepth(-9500);
-      mat(g, 230, 376);
+    tiles: ['WWWWWWWWWW', 'WWWWWWWWWW', 'wwwwwwwwww', 'oooooooooo', 'oooooooooo', 'oooooooooo', 'oooooooooo', 'oooooooooo', 'oooooooooo'],
+    wall: 136, indoor: true, ambient: null,
+    decorate(p) {
+      p.r(68, 136, 24, 8, MAT).box(67, 135, 26, 10, INK).r(70, 138, 20, 1, '#d79a64');
+      p.line(0, 6, 160, 6, '#3a2550');
+      for (let x = 4; x < 160; x += 9) p.p(x, 7 + (x % 3), '#3a2550').p(x, 8 + (x % 3), ['#ffd77a', '#ff9ec0', '#9fe8ff', '#fff1c9'][x % 4]);
     },
     props: [
-      { key: 'rug', x: 226, y: 348, floor: true }, { key: 'slippers', x: 298, y: 386, floor: true },
-      { key: 'window', x: 240, y: 100, wall: true }, { key: 'posterInk', x: 340, y: 72, wall: true }, { key: 'wallshelf', x: 420, y: 62, wall: true },
-      { key: 'desk', x: 110, y: 160 }, { key: 'chair', x: 116, y: 200 },
-      { key: 'guitar', x: 236, y: 150 }, { key: 'piano', x: 340, y: 158 },
-      { key: 'bed', x: 380, y: 352 }, { key: 'plant', x: 440, y: 172 },
-      { key: 'laundry', x: 46, y: 364 }, { key: 'beanbag', x: 52, y: 272 },
-      { key: 'books', x: 206, y: 214 }, { key: 'backpack', x: 296, y: 216 }
+      { key: 'rug', x: 228, y: 372, floor: true }, { key: 'slippers', x: 300, y: 428, floor: true },
+      { key: 'window', x: 270, y: 126, wall: true }, { key: 'posterInk', x: 372, y: 108, wall: true }, { key: 'wallshelf', x: 446, y: 72, wall: true },
+      { key: 'desk', x: 96, y: 178 }, { key: 'chair', x: 110, y: 224 },
+      { key: 'guitar', x: 222, y: 172 }, { key: 'piano', x: 330, y: 172 }, { key: 'plant', x: 456, y: 176 },
+      { key: 'bed', x: 396, y: 424 }, { key: 'beanbag', x: 46, y: 300 }, { key: 'laundry', x: 46, y: 412 },
+      { key: 'books', x: 190, y: 252 }, { key: 'backpack', x: 300, y: 246 }
     ],
-    setup(w) {
-      const ADD = Phaser.BlendModes.ADD;
-      // morning light from the window, with dust drifting in it
-      const beam = w.add.image(240, 30, 'light-beam').setOrigin(0.5, 0).setDisplaySize(176, 340).setBlendMode(ADD).setAlpha(0.2).setDepth(8000);
-      w.tweens.add({ targets: beam, alpha: 0.27, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      w.add.particles(0, 0, 'dust', {
-        x: { min: 178, max: 304 }, y: { min: 110, max: 340 }, lifespan: { min: 4000, max: 7000 },
-        speedX: { min: -4, max: 4 }, speedY: { min: -7, max: 2 }, scale: { start: 0.35, end: 0.08 },
-        alpha: { start: 0.8, end: 0 }, frequency: 240, blendMode: 'ADD'
-      }).setDepth(8001);
-      // the monitor and laptop are still on
-      w.add.image(140, 34, 'glow').setTint(0x7cc4ff).setBlendMode(ADD).setAlpha(0.4).setDisplaySize(130, 96).setDepth(-4000);
-      w.add.image(40, 58, 'glow').setTint(0x9fe8ff).setBlendMode(ADD).setAlpha(0.3).setDisplaySize(70, 50).setDepth(-4000);
-      // fairy lights along the top of the wall
-      const wire = w.add.graphics().setDepth(-4500);
-      wire.lineStyle(1.6, 0x120c1c);
-      const pts: [number, number][] = [];
-      for (let x = 0; x <= 460; x += 4) pts.push([x, 16 + Math.abs(Math.sin((x / 460) * Math.PI * 3)) * 14]);
-      wire.strokePoints(pts.map(([x, y]) => new Phaser.Math.Vector2(x, y)));
-      const cols = [0xffd77a, 0xff9ec0, 0x9fe8ff, 0xffd77a, 0xfff1c9];
-      for (let i = 0, x = 12; x < 460; x += 26, i++) {
-        const y = 18 + Math.abs(Math.sin((x / 460) * Math.PI * 3)) * 14;
-        const c = cols[i % cols.length];
-        const glow = w.add.image(x, y + 4, 'glow').setTint(c).setBlendMode(ADD).setAlpha(0.5).setDisplaySize(24, 24).setDepth(-4400);
-        w.add.circle(x, y + 4, 2.6, c).setStrokeStyle(1, 0x1b1325).setDepth(-4399);
-        w.tweens.add({ targets: glow, alpha: 0.2, duration: 900 + (i % 4) * 300, yoyo: true, repeat: -1, delay: (i * 170) % 1100 });
-      }
-      // soft shadow towards the corners
-      w.add.image(230, 205, 'vignette').setDisplaySize(620, 520).setAlpha(0.6).setDepth(9000);
-    },
-    spawns: { wake: [292, 330], door: [230, 352] },
+    lights: [[270, 150, '#fff1c9', 110], [130, 80, '#9fd8ff', 70]],
+    spawns: { wake: [300, 380], door: [240, 404] },
     spots: [
-      look(90, 176, 52, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.']),
-      { x: 340, y: 176, r: 56, label: 'Play', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
-      { x: 236, y: 162, r: 34, label: 'Strum', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
-      look(372, 300, 84, ['Mohit could go back to sleep...', '...but the silence is too loud.']),
-      look(240, 132, 40, ['The street outside is completely empty.']),
-      look(340, 132, 30, ["A poster of The Ink Spots. 1939.", "Mohit's favourite song is still stuck in his head."]),
-      look(46, 360, 46, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."]),
-      look(52, 300, 40, ['The beanbag still has a Mohit-shaped dent in it.']),
-      door(230, 380, 'city', 'apt', 'Go out')
+      look(64, 198, 58, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.']),
+      { x: 330, y: 198, r: 60, label: 'Play', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
+      { x: 222, y: 190, r: 38, label: 'Strum', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
+      look(390, 330, 90, ['Mohit could go back to sleep...', '...but the silence is too loud.']),
+      look(270, 160, 40, ['The street outside is completely empty.']),
+      look(372, 156, 34, ['A poster of The Ink Spots. 1939.', "Mohit's favourite song is still stuck in his head."]),
+      look(46, 410, 50, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."]),
+      look(46, 318, 44, ['The beanbag still has a Mohit-shaped dent in it.']),
+      door(240, 424, 'city', 'apt', 'Go out')
     ],
     async enter(w) {
       if (f('woke')) return;
@@ -282,84 +268,64 @@ export const MAPS: Record<MapName, MapDef> = {
   },
 
   city: {
-    w: 1400, h: 1100, ambient: 'wind',
-    draw(g) {
-      g.fillStyle(0xd8d0c6).fillRect(0, 0, 1400, 1100);
-      const plaza = (x: number, y: number, w: number, h: number) => {
-        g.fillStyle(0xe7e0d6).fillRect(x, y, w, h);
-        g.lineStyle(1, 0xcfc6ba);
-        for (let xx = x + 34; xx < x + w; xx += 34) g.lineBetween(xx, y, xx, y + h);
-        for (let yy = y + 34; yy < y + h; yy += 34) g.lineBetween(x, yy, x + w, yy);
-      };
-      plaza(0, 0, 614, 484); plaza(786, 0, 614, 484); plaza(0, 656, 614, 444);
-      // park
-      g.fillStyle(0x8cc97e).fillRect(786, 656, 614, 444);
-      g.fillStyle(0x76b768);
-      const rng = new Phaser.Math.RandomDataGenerator(['park']);
-      for (let i = 0; i < 160; i++) g.fillRect(rng.between(790, 1395), rng.between(660, 1095), 3, 7);
-      g.fillStyle(0xd9c9a8).fillRect(786, 860, 614, 40).fillRect(1070, 656, 40, 444).fillCircle(1090, 880, 96);
-      // roads
-      g.fillStyle(0x4a4655).fillRect(0, 520, 1400, 100).fillRect(650, 0, 100, 1100);
-      g.lineStyle(3, 0x1b1325);
-      g.lineBetween(0, 520, 650, 520).lineBetween(750, 520, 1400, 520).lineBetween(0, 620, 650, 620).lineBetween(750, 620, 1400, 620);
-      g.lineBetween(650, 0, 650, 520).lineBetween(750, 0, 750, 520).lineBetween(650, 620, 650, 1100).lineBetween(750, 620, 750, 1100);
-      g.fillStyle(0xffc23c);
-      for (let x = 10; x < 1400; x += 50) if (x < 610 || x > 770) g.fillRect(x, 568, 26, 4);
-      for (let y = 10; y < 1100; y += 50) if (y < 480 || y > 640) g.fillRect(698, y, 4, 26);
-      g.fillStyle(0xf4f1f7);
-      for (let y = 528; y < 614; y += 14) { g.fillRect(608, y, 34, 7); g.fillRect(758, y, 34, 7); }
-      for (let x = 658; x < 744; x += 14) { g.fillRect(x, 478, 7, 34); g.fillRect(x, 628, 7, 34); }
-      g.fillStyle(0x3a3646).fillCircle(560, 600, 12).fillCircle(700, 300, 12);
+    tiles: cityTiles(), ambient: 'wind',
+    decorate(p) {
+      for (let x = 2; x < 512; x += 10) if (x < 208 || x > 304) p.r(x, 191, 5, 2, '#f2d36b');
+      for (let y = 2; y < 384; y += 10) if (y < 144 || y > 240) p.r(255, y, 2, 5, '#f2d36b');
+      [[96, 196], [200, 340], [420, 186]].forEach(([x, y]) => p.disc(x, y, 4, '#4a4452').disc(x, y, 3, '#5a5462').line(x - 2, y, x + 2, y, '#3d3746'));
     },
+    wires: cityWires(),
     props: [
-      { key: 'apt', x: 300, y: 470 }, { key: 'gym', x: 1060, y: 470 }, { key: 'cafe', x: 300, y: 912 },
-      { key: 'tree', x: 70, y: 400 }, { key: 'tree', x: 540, y: 400 }, { key: 'tree', x: 60, y: 230 }, { key: 'tree', x: 560, y: 220 },
-      { key: 'tree', x: 850, y: 330 }, { key: 'tree', x: 1320, y: 380 }, { key: 'tree', x: 1340, y: 200 },
-      { key: 'tree', x: 80, y: 830 }, { key: 'tree', x: 530, y: 830 },
-      { key: 'tree', x: 870, y: 750 }, { key: 'tree', x: 1320, y: 760 }, { key: 'tree', x: 880, y: 1060 }, { key: 'tree', x: 1320, y: 1060 },
-      { key: 'lamp', x: 140, y: 508 }, { key: 'lamp', x: 460, y: 508 }, { key: 'lamp', x: 960, y: 508 }, { key: 'lamp', x: 1240, y: 508 },
-      { key: 'lamp', x: 140, y: 652 }, { key: 'lamp', x: 460, y: 652 }, { key: 'lamp', x: 960, y: 652 }, { key: 'lamp', x: 1240, y: 652 },
-      { key: 'lamp', x: 632, y: 300 }, { key: 'lamp', x: 770, y: 840 },
-      { key: 'busstop', x: 880, y: 514 }, { key: 'scooter', x: 470, y: 484 }, { key: 'bin', x: 560, y: 500 }, { key: 'bin', x: 1150, y: 500 },
-      { key: 'bench', x: 160, y: 1010 }, { key: 'bench', x: 440, y: 1010 }, { key: 'plant', x: 200, y: 930 }, { key: 'plant', x: 400, y: 930 },
-      { key: 'fountain', x: 1090, y: 906 }, { key: 'bench', x: 990, y: 990 }, { key: 'bench', x: 1190, y: 990 },
-      { key: 'bush', x: 960, y: 720 }, { key: 'bush', x: 1220, y: 720 }, { key: 'bush', x: 1000, y: 1080 }, { key: 'bush', x: 1180, y: 1080 },
-      { key: 'barricade', x: 1340, y: 560 }, { key: 'barricade', x: 1340, y: 612 },
-      { key: 'barricade', x: 60, y: 560 }, { key: 'barricade', x: 60, y: 612 },
-      { key: 'barricade', x: 700, y: 60 }, { key: 'barricade', x: 700, y: 1090 }
+      { key: 'apt', x: 336, y: 476 }, { key: 'gym', x: 1056, y: 476 }, { key: 'shops', x: 1384, y: 476 },
+      { key: 'cwall', x: 52, y: 476 }, { key: 'cwall', x: 620, y: 476 },
+      { key: 'cafe', x: 336, y: 958 }, { key: 'dairy', x: 600, y: 760 },
+      { key: 'tapri', x: 920, y: 770 },
+      ...POLES.map(([x, y]) => ({ key: 'pole', x, y })),
+      { key: 'busstop', x: 1250, y: 522 }, { key: 'auto', x: 470, y: 616 }, { key: 'scooter', x: 560, y: 522 },
+      { key: 'neem', x: 64, y: 330 }, { key: 'neem', x: 640, y: 300 }, { key: 'neem', x: 90, y: 760 }, { key: 'neem', x: 610, y: 1080 },
+      { key: 'neem', x: 1000, y: 1060 }, { key: 'neem', x: 1440, y: 790 }, { key: 'neem', x: 1460, y: 1100 }, { key: 'neem', x: 1310, y: 1110 },
+      { key: 'bench', x: 1060, y: 980 }, { key: 'bench', x: 1320, y: 980 },
+      { key: 'stumps', x: 1310, y: 760 },
+      { key: 'bush', x: 1080, y: 760 }, { key: 'bush', x: 1480, y: 950 }, { key: 'bush', x: 1100, y: 1120 },
+      { key: 'bin', x: 600, y: 520 }, { key: 'bin', x: 1196, y: 700 },
+      ...Array.from({ length: 13 }, (_, i) => 888 + i * 48).filter(x => x < 1140 || x > 1212).map(x => ({ key: 'railing', x, y: 700 })),
+      { key: 'barricade', x: 1500, y: 566 }, { key: 'barricade', x: 1500, y: 618 },
+      { key: 'barricade', x: 40, y: 566 }, { key: 'barricade', x: 40, y: 618 },
+      { key: 'barricade', x: 768, y: 70 }, { key: 'barricade', x: 768, y: 1146 }
     ],
-    blocks: [[1290, 520, 110, 100], [0, 520, 110, 100], [650, 0, 100, 64], [650, 1050, 100, 50]],
-    spawns: { apt: [300, 502], gym: [1060, 502], cafe: [300, 944], east: [1250, 575] },
+    blocks: [[1450, 528, 86, 96], [0, 528, 86, 96], [720, 0, 96, 64], [720, 1100, 96, 52]],
+    spawns: { apt: [336, 508], gym: [1056, 508], cafe: [336, 990], east: [1400, 576] },
     spots: [
-      door(300, 478, 'room', 'door', 'Go in'),
-      door(1060, 478, 'gym', 'door', 'Enter'),
-      door(300, 920, 'cafe', 'door', 'Enter', async w => {
+      door(336, 484, 'room', 'door', 'Go in'),
+      door(1056, 484, 'gym', 'door', 'Enter'),
+      door(336, 966, 'cafe', 'door', 'Enter', async w => {
         if (f('gymSearched')) return true;
         await w.say(['The café door is locked.', 'There is a note taped to it:', '"Gone to the gym. Back in 5 min."']);
         await w.say(M('...The gym, then.'));
         state.set('sawNote');
         return false;
       }),
-      { x: 1280, y: 570, r: 80, label: 'Look', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
-      look(110, 570, 80, ['Also closed.']),
-      look(700, 104, 60, ['This one too. Suspicious.']),
-      look(700, 1030, 60, ['Closed. Every road out of town is closed.']),
-      look(880, 532, 54, ["Bus stop. The sign says the next bus is 'Delayed'.", 'It always says that.']),
-      look(470, 500, 44, ["Someone's scooter. The keys are still in it.", "Mohit doesn't take it. He's not like that."]),
-      look(1090, 930, 74, ['The fountain is dry. Someone left a one-rupee coin in it.']),
-      look(990, 1006, 44, ['A bench. Nobody to share it with.'])
+      { x: 1420, y: 576, r: 80, label: 'Look', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
+      look(120, 576, 80, ['Also closed.']),
+      look(768, 110, 60, ['This one too. Suspicious.']),
+      look(768, 1090, 60, ['Closed. Every road out of town is closed.']),
+      look(1250, 540, 54, ["Bus stop. The board says the next bus is 'Delayed'.", 'It always says that.']),
+      look(470, 640, 50, ['An auto, parked with the meter still down.', 'No driver. No "Bhaiya, chaloge?" Nothing.']),
+      look(920, 790, 56, ['The chai tapri. The kettle is still warm.', 'Ten rupees a cup, and nobody to sell it.']),
+      look(600, 780, 44, ['The milk booth. The crates are full.']),
+      look(1310, 778, 40, ['Gully cricket stumps. Someone was batting.', 'They left mid-over.']),
+      look(1384, 500, 60, ["Every shutter is down. Even Sharma ji's, and he never closes."])
     ],
     target: () => !f('cityIntro') ? null
-      : !f('gymSearched') ? [1060, 408]
-      : !f('cafe') ? [300, 846]
-      : f('fed') && !f('ch1Done') ? [1300, 530] : null,
+      : !f('gymSearched') ? [1056, 400]
+      : !f('cafe') ? [336, 880]
+      : f('fed') && !f('ch1Done') ? [1440, 520] : null,
     setup(w) {
-      // a plastic bag tumbles across the empty road now and then
-      const bag = w.add.image(-40, 560, 'prop-plasticbag').setScale(1 / RES).setDepth(600);
+      const bag = w.add.image(-40, 560, 'pix-plasticbag').setScale(ART).setDepth(600);
       const roll = () => {
-        bag.setPosition(-40, Phaser.Math.Between(540, 600));
+        bag.setPosition(-40, Phaser.Math.Between(545, 605));
         w.tweens.add({
-          targets: bag, x: 1440, angle: 720, duration: 9000, ease: 'Linear',
+          targets: bag, x: 1580, angle: 720, duration: 9500, ease: 'Linear',
           onUpdate: () => { bag.y += Math.sin(bag.x / 40) * 0.6; },
           onComplete: () => w.time.delayedCall(Phaser.Math.Between(6000, 14000), roll)
         });
@@ -371,40 +337,31 @@ export const MAPS: Record<MapName, MapDef> = {
       await w.wait(400);
       await w.say(['Mohit steps outside.', 'Nobody. Not a single person. Not even a stray dog.']);
       await w.say(M('...Where did everyone go?'));
-      await w.say(M("The gym across the road is always packed. Someone has to be there."));
+      await w.say(M('The gym across the road is always packed. Someone has to be there.'));
       state.set('cityIntro');
       ui.objective(objectiveText());
     }
   },
 
   gym: {
-    w: 520, h: 400, wall: 120, ambient: 'gym',
+    tiles: ['MMMMMMMMMMM', 'mmmmmmmmmmm', 'uuuuuuuuuuu', 'uuuuuuuuuuu', 'uuuuuuuuuuu', 'uuuuuuuuuuu', 'uuuuuuuuuuu', 'uuuuuuuuuuu'],
+    wall: 92, indoor: true, ambient: 'gym',
     hints: () => !f('gymSearched'),
-    draw(g) {
-      backWall(g, 520, 122, 0x5f6c7e, 0x3f4a5a);
-      g.fillStyle(0xbcd7f0).fillRect(130, 20, 260, 80);
-      g.lineStyle(3, 0x1b1325).strokeRect(130, 20, 260, 80);
-      g.lineStyle(4, 0xffffff, 0.45).lineBetween(150, 90, 190, 30).lineBetween(280, 90, 310, 44);
-      g.fillStyle(0x3a3f4c).fillRect(0, 122, 520, 278);
-      g.lineStyle(1, 0x454b5a);
-      for (let x = 0; x < 520; x += 40) g.lineBetween(x, 122, x, 400);
-      for (let y = 122; y < 400; y += 40) g.lineBetween(0, y, 520, y);
-      g.fillStyle(0xff8fb6).fillRoundedRect(60, 280, 100, 40, 6);
-      g.fillStyle(0x36dcae).fillRoundedRect(60, 330, 100, 40, 6);
-      mat(g, 260, 386);
-    },
+    decorate(p) { p.r(76, 120, 24, 8, '#3a3f4c').box(75, 119, 26, 10, INK); },
     props: [
-      { key: 'speaker', x: 40, y: 134 }, { key: 'treadmill', x: 130, y: 180 }, { key: 'treadmill', x: 245, y: 180 },
-      { key: 'rack', x: 395, y: 154 }, { key: 'cooler', x: 494, y: 156 }, { key: 'benchpress', x: 400, y: 312 }
+      { key: 'mat', x: 132, y: 330, floor: true },
+      { key: 'speaker', x: 40, y: 126 }, { key: 'treadmill', x: 130, y: 150 }, { key: 'treadmill', x: 250, y: 150 },
+      { key: 'rack', x: 420, y: 140 }, { key: 'cooler', x: 504, y: 140 }, { key: 'benchpress', x: 420, y: 304 }
     ],
-    spawns: { door: [260, 370] },
+    lights: [[264, 60, '#dbeeff', 160]],
+    spawns: { door: [264, 350] },
     spots: [
-      gymLook(185, 200, 76, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.']),
-      gymLook(395, 172, 52, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.']),
-      gymLook(40, 152, 40, ['The gym playlist is still going.', 'Honestly, kind of a banger.']),
-      gymLook(494, 172, 36, ['Free water. At least something still works.']),
-      gymLook(400, 330, 56, ["Nobody's spotting anybody today."]),
-      door(260, 392, 'city', 'gym', 'Go out')
+      gymLook(190, 172, 80, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.']),
+      gymLook(420, 162, 56, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.']),
+      gymLook(40, 146, 44, ['The gym playlist is still going.', 'Honestly, kind of a banger.']),
+      gymLook(504, 160, 40, ['Free water. At least something still works.']),
+      gymLook(420, 324, 60, ["Nobody's spotting anybody today."]),
+      door(264, 372, 'city', 'gym', 'Go out')
     ],
     async enter(w) {
       if (f('gym')) return;
@@ -417,32 +374,31 @@ export const MAPS: Record<MapName, MapDef> = {
   },
 
   cafe: {
-    w: 540, h: 420, wall: 122, ambient: 'hum',
-    target: () => f('cafe') && !f('metPoi') ? [460, 40] : null,
-    draw(g) {
-      backWall(g, 540, 124, 0xf0dcc0, 0xc98a5a);
-      g.fillStyle(0xc98a5a).fillRect(0, 84, 540, 30);
-      g.lineStyle(3, 0x1b1325).lineBetween(0, 84, 540, 84);
-      checker(g, 0, 124, 540, 296, 0xe9d8c0, 0xd6c0a2, 30);
-      mat(g, 270, 406);
+    tiles: ['AAAAAAAAAAA', 'aaaaaaaaaaa', 'xxxxxxxxxxx', 'xxxxxxxxxxx', 'xxxxxxxxxxx', 'xxxxxxxxxxx', 'xxxxxxxxxxx', 'xxxxxxxxxxx', 'xxxxxxxxxxx'],
+    wall: 92, indoor: true, ambient: 'hum',
+    target: () => f('cafe') && !f('metPoi') ? [460, 0] : null,
+    decorate(p) {
+      p.r(76, 136, 24, 8, MAT).box(75, 135, 26, 10, INK);
+      for (let x = 6; x < 176; x += 10) p.p(x, 3 + (x % 4 ? 1 : 0), x % 20 ? '#ffd27a' : '#ff9ec0');
     },
     props: [
-      { key: 'menuboard', x: 260, y: 78, wall: true }, { key: 'kdoor', x: 460, y: 124, wall: true },
-      { key: 'counter', x: 130, y: 204 },
-      { key: 'table', x: 300, y: 272 }, { key: 'table', x: 440, y: 334 }, { key: 'table', x: 170, y: 352 },
-      { key: 'plant', x: 26, y: 176 }, { key: 'plant', x: 520, y: 182 }
+      { key: 'menuboard', x: 264, y: 66, wall: true }, { key: 'kdoor', x: 460, y: 96, wall: true },
+      { key: 'counter', x: 130, y: 190 },
+      { key: 'tableset', x: 300, y: 272 }, { key: 'tableset', x: 440, y: 334 }, { key: 'tableset', x: 170, y: 356 },
+      { key: 'plant', x: 24, y: 150 }, { key: 'plant', x: 512, y: 150 }
     ],
-    spawns: { door: [270, 392], kitchen: [460, 162] },
+    lights: [[264, 40, '#ffd27a', 150], [130, 120, '#ffcf7a', 80]],
+    spawns: { door: [264, 398], kitchen: [460, 140] },
     spots: [
-      look(130, 222, 74, ['Fresh buns under the glass. Nobody is watching them.', 'Mohit is not that kind of person either.']),
-      look(300, 290, 54, ['A half-finished cup of chai.', "It's still a little warm..."]),
-      look(440, 352, 54, ['Someone left a crossword half done. 7 down: "LONELY". Mohit puts the pen down.']),
-      door(460, 146, 'kitchen', 'door', 'Open', async w => {
+      look(130, 212, 78, ['Fresh buns under the glass. Nobody is watching them.', 'Mohit is not that kind of person either.']),
+      look(300, 292, 56, ['A half-finished cup of chai.', "It's still a little warm..."]),
+      look(440, 354, 56, ['Someone left a crossword half done. 7 down: "LONELY".', 'Mohit puts the pen down.']),
+      door(460, 120, 'kitchen', 'door', 'Open', async w => {
         if (f('cafe')) return true;
         await w.say(['STAFF ONLY.', 'Mohit is not staff.']);
         return false;
       }),
-      door(270, 412, 'city', 'cafe', 'Go out')
+      door(264, 420, 'city', 'cafe', 'Go out')
     ],
     async enter(w) {
       if (f('cafe')) return;
@@ -461,26 +417,19 @@ export const MAPS: Record<MapName, MapDef> = {
   },
 
   kitchen: {
-    w: 480, h: 390, wall: 110, ambient: 'drone', poiAllowed: true,
-    draw(g) {
-      g.fillStyle(0xdfe8ef).fillRect(0, 0, 480, 112);
-      g.lineStyle(1, 0xc4d0da);
-      for (let x = 0; x < 480; x += 22) g.lineBetween(x, 0, x, 102);
-      for (let y = 0; y < 102; y += 22) g.lineBetween(0, y, 480, y);
-      g.fillStyle(0x9b98a8).fillRect(0, 102, 480, 10);
-      g.lineStyle(3, 0x1b1325).lineBetween(0, 102, 480, 102).lineBetween(0, 112, 480, 112);
-      checker(g, 0, 112, 480, 278, 0x5a5068, 0x3a3346, 32);
-      mat(g, 240, 376);
-    },
+    tiles: ['KKKKKKKKKK', 'qqqqqqqqqq', 'yyyyyyyyyy', 'yyyyyyyyyy', 'yyyyyyyyyy', 'yyyyyyyyyy', 'yyyyyyyyyy', 'yyyyyyyyyy'],
+    wall: 92, indoor: true, ambient: 'drone', poiAllowed: true,
+    decorate(p) { p.r(68, 120, 24, 8, MAT).box(67, 119, 26, 10, INK); },
     props: [
-      { key: 'fridge', x: 48, y: 152 }, { key: 'stove', x: 160, y: 142 }, { key: 'sink', x: 292, y: 142 },
-      { key: 'shelf', x: 420, y: 152 }, { key: 'crates', x: 440, y: 336 }
+      { key: 'fridge', x: 48, y: 128 }, { key: 'stove', x: 160, y: 122 }, { key: 'sink', x: 300, y: 122 },
+      { key: 'shelf', x: 420, y: 128 }, { key: 'crates', x: 440, y: 330 }
     ],
-    spawns: { door: [240, 362] },
+    lights: [[240, 40, '#fff1c9', 120]],
+    spawns: { door: [240, 360] },
     spots: [
-      { x: 48, y: 168, r: 44, label: 'Look', run: w => w.say(f('fed') ? 'The fridge. Mohit closes it before PoiPoi gets ideas.' : 'The fridge is open a crack. Something has been in here.') },
-      look(420, 170, 54, ['Shelves of atta and dal. One sack is missing.']),
-      door(240, 382, 'cafe', 'kitchen', 'Go out', async w => {
+      { x: 48, y: 146, r: 44, label: 'Look', run: w => w.say(f('fed') ? 'The fridge. Mohit closes it before PoiPoi gets ideas.' : 'The fridge is open a crack. Something has been in here.') },
+      look(420, 150, 54, ['Shelves of atta and dal. One sack is missing.']),
+      door(240, 380, 'cafe', 'kitchen', 'Go out', async w => {
         if (!f('metPoi') || f('fed')) return true;
         await w.say(M("I can't just leave him hungry."));
         return false;
@@ -489,9 +438,9 @@ export const MAPS: Record<MapName, MapDef> = {
     setup(w) {
       if (!f('metPoi')) kitchenBag(w);
       else {
-        w.prop('bagdown', 392, 252, false).setDepth(252);
+        w.prop('bagdown', 392, 262, false, true);
         sfx.ambient('hum');
-        if (!f('fed')) { const poi = w.addPoi(250, 226); w.followPaused = true; poi.sprite.play('p-loaf'); }
+        if (!f('fed')) { const poi = w.addPoi(BAG_X, BAG_Y); w.followPaused = true; poi.sprite.play('p-loaf'); }
       }
     },
     async enter(w) {
@@ -513,3 +462,5 @@ export const MAPS: Record<MapName, MapDef> = {
     }
   }
 };
+
+export const mapSize = (m: MapDef) => ({ w: m.tiles[0].length * T, h: m.tiles.length * T });

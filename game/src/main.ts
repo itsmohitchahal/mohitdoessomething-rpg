@@ -23,7 +23,8 @@ const game = new Phaser.Game({
   audio: { noAudio: true },
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.NONE, zoom: 1 / DPR },
-  render: { antialias: true, roundPixels: false },
+  pixelArt: true,
+  render: { roundPixels: true },
   scene: [Boot, World, Battle]
 });
 

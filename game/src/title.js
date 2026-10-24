@@ -1,4 +1,7 @@
-import { ROOM_DEFS, DESK, CHAIR, pianoSVG, GUITAR } from './art/furniture.js';
+import { MOHIT_FRAMES, MOHIT_FW, MOHIT_FH, catFrames, POI_LOOK, MAO_LOOK, CAT_FW, CAT_FH } from './px/sprites';
+import { PIX } from './px/props';
+import { Px, rng } from './px/paint';
+import { paintGround } from './px/terrain';
 // Title screen (approved v2 art test), now the game's front door.
 export function initTitle(opts) {
 const $ = s => document.querySelector(s);
@@ -38,188 +41,75 @@ document.querySelector('.logo').addEventListener('pointerdown', e => {
   setTimeout(() => l.classList.remove('boing'), 470);
 });
 
-/* ---------- fairy lights ---------- */
-function buildLights() {
-  const svg = $('#lights'), w = stage.clientWidth;
-  const paths = [`M -20 6 Q ${w * .25} 74 ${w * .5} 14 T ${w + 20} 6`, `M -20 46 Q ${w * .18} 104 ${w * .4} 48 T ${w * .82} 46 T ${w * 1.25} 46`];
-  const cols = ['#ffd77a', '#fff1c9', '#ff9ec0', '#ffd77a', '#9fe8ff'];
-  let html = '';
-  paths.forEach((d, pi) => {
-    html += `<path class="wire" d="${d}"/>`;
-  });
-  svg.innerHTML = html;
-  const bulbs = [];
-  svg.querySelectorAll('.wire').forEach((p, pi) => {
-    const len = p.getTotalLength();
-    for (let s = 18 + pi * 9; s < len; s += 40) {
-      const pt = p.getPointAtLength(s), c = cols[(s / 40 | 0) % 5];
-      bulbs.push(`<g class="bulb" style="animation-delay:${(-Math.random() * 2.4).toFixed(2)}s"><rect x="${pt.x - 2.5}" y="${pt.y - 1}" width="5" height="5" rx="1" fill="${INK}"/>
-        <circle cx="${pt.x}" cy="${pt.y + 9}" r="9" fill="${c}" opacity=".22"/><ellipse cx="${pt.x}" cy="${pt.y + 9}" rx="4.2" ry="5.4" fill="${c}" stroke="${INK}" stroke-width="1.5"/></g>`);
-    }
-  });
-  svg.insertAdjacentHTML('beforeend', bulbs.join(''));
-}
-
-function buildRoom() {
-  const R = $('#room');
-  const s = clamp(Math.min(W / 560, H / 820), 0.6, 1.15);
-  const rh = 160 * s;
-  R.setAttribute('viewBox', `0 0 ${W} ${rh}`);
-  R.style.height = rh + 'px';
-  R.style.bottom = `calc(31% - ${16 * s}px)`;
-  const pad = Math.max(10, W * 0.04);
-  const deskX = pad, pianoX = W - pad - 152 * s;
-  const gapL = deskX + 172 * s;
-  // the guitar leans in the gap between desk and piano, or tucks behind the piano's end on narrow screens
-  const gx = pianoX - gapL > 40 * s ? (gapL + pianoX) / 2 : pianoX + 8 * s;
-  const at = (x, y, inner) => `<g transform="translate(${x} ${y}) scale(${s})">${inner}</g>`;
-  R.innerHTML = ROOM_DEFS + at(gx, rh - 4 * s, GUITAR) + at(deskX, rh, DESK) + at(pianoX, rh - 2 * s, pianoSVG()) + at(deskX + 50 * s, rh + 14 * s, CHAIR);
-}
-
-/* ---------- art ---------- */
-const CATS = {
-  poi: { fur: '#fffaf4', shade: '#efe4da', far: '#ece2d8', ruff: '#ffffff', ear: '#6e6676', earShade: '#57505f', earIn: '#f6b3c6',
-         tail: '#8b8393', tailShade: '#6e6676', eye: '#a6d8ff', eyeDark: '#4b9be8', mask: true, toes: true, soft: true },
-  mao: { fur: '#666270', shade: '#4f4b59', far: '#55515f', ruff: '#7d7987', ear: '#5a5664', earShade: '#45414f', earIn: '#d58ea3',
-         tail: '#5d5967', tailShade: '#45414f', eye: '#ffad33', eyeDark: '#c86a10', stripes: '#3d3947', persian: true }
+/* ---------- pixel sprites ---------- */
+const bake = frames => Object.fromEntries(Object.entries(frames).map(([k, f]) => [k, f().cv]));
+const FRAMES = { mohit: bake(MOHIT_FRAMES), poi: bake(catFrames(POI_LOOK)), mao: bake(catFrames(MAO_LOOK)) };
+const DIMS = { mohit: [MOHIT_FW, MOHIT_FH], poi: [CAT_FW, CAT_FH], mao: [CAT_FW, CAT_FH] };
+const PX_SCALE = { mohit: 5, poi: 5, mao: 4 };
+// which frames each animation state cycles through, and milliseconds per frame
+const CAT_STATES = {
+  idle: [['idle', 'idle2', 'idle', 'blink'], 700], walk: [['walk0', 'walk1', 'walk2', 'walk1'], 150], run: [['walk0', 'walk1', 'walk2', 'walk1'], 100],
+  sprint: [['walk0', 'walk2'], 70], crouch: [['loaf'], 1000], air: [['walk2'], 1000], slap: [['walk0', 'walk2'], 60],
+  boop: [['sniff', 'idle'], 300], groom: [['eat', 'eat2'], 220], loaf: [['loaf', 'loaf', 'loaf', 'loafBlink'], 600],
+  distracted: [['stare'], 1000], annoyed: [['loaf'], 1000], hide: [['loaf'], 1000], happy: [['happy'], 1000], fight: [['walk0', 'walk2'], 80]
 };
-function catSVG(o) {
-  const S = `stroke="${INK}" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"`;
-  const leg = (cls, x, y, fill, extra = '') => `<g class="leg ${cls}">
-    <path d="M${x} ${y} L${x + 14} ${y} L${x + 13} ${y + 20} Q${x + 13} ${y + 25} ${x + 7} ${y + 25} Q${x + 1} ${y + 25} ${x + 1} ${y + 20} Z" fill="${fill}" ${S}/>
-    <path d="M${x + 5} ${y + 21} v3.5 M${x + 9} ${y + 21} v3.5" stroke="${INK}" stroke-width="1.6" stroke-linecap="round"/>${extra}</g>`;
-  const toes = o.toes ? `<circle cx="109.5" cy="122" r="2" fill="#6e6676"/><circle cx="113.5" cy="123" r="2" fill="#6e6676"/><circle cx="117.5" cy="122" r="2" fill="#6e6676"/>` : '';
-  const claws = `<g class="claws" fill="#fff" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"><path d="M119 116 l7 1.5 l-7 2z"/><path d="M119 120 l7 1.5 l-7 2z"/><path d="M118 124 l6 1.5 l-6 1.8z"/></g>`;
-  // PoiPoi (soft) gets rounded, scalloped fluff; MaoMao keeps the spiky kitten fluff.
-  const body = o.soft
-    ? 'M44 96 C 40 80 52 68 72 67 Q 78 63 84 67 C 96 66 106 71 113 80 Q 120 84 115 89 Q 121 94 113 97 C 110 108 96 114 78 114 Q 72 119 67 114 C 54 113 44 108 44 96 Z'
-    : 'M44 96 C 40 80 52 68 70 67 L76 62 L80 68 C 92 66 104 70 112 80 L118 84 L113 88 L119 93 L112 96 C 110 108 96 114 78 114 L72 119 L68 113 C 54 113 44 108 44 96 Z';
-  const head = o.soft
-    ? 'M108 24 C 130 24 144 40 143 58 Q 150 62 145 68 Q 149 74 140 76 C 133 88 121 94 108 94 C 95 94 83 88 76 76 Q 67 74 71 68 Q 66 62 73 58 C 72 40 86 24 108 24 Z'
-    : 'M108 26 C 128 26 142 40 142 56 L149 62 L141 64 L147 71 L138 72 C 132 86 120 92 108 92 C 96 92 84 86 78 72 L69 71 L75 64 L67 62 L74 56 C 74 40 88 26 108 26 Z';
-  const tail = o.soft
-    ? 'M52 94 C 30 96 12 84 11 62 Q 5 56 13 54 Q 10 46 19 48 Q 22 40 28 47 C 31 62 36 76 54 84 Z'
-    : 'M52 94 C 30 96 14 84 12 64 L7 58 L14 57 L11 49 L19 52 L20 44 L26 51 C 30 64 34 76 54 84 Z';
-  const ruff = o.soft
-    ? 'M99 72 Q 108 76 103 81 Q 111 85 104 90 Q 110 95 99 96 C 93 88 93 80 99 72Z'
-    : 'M100 74 L106 80 L101 82 L108 88 L102 90 L107 97 L97 96 C 93 88 94 80 100 74Z';
-  const ears = o.persian
-    ? [`<path d="M84 42 L84 21 L101 33 Z" fill="${o.ear}" ${S}/><path d="M87 37 L87 26 L97 33 Z" fill="${o.earIn}"/><path d="M89 35 l3 -5 M92 36 l3 -4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`,
-       `<path d="M117 33 L134 21 L133 43 Z" fill="${o.ear}" ${S}/><path d="M120 33 L131 26 L130 39 Z" fill="${o.earIn}"/>`]
-    : [`<path d="M80 47 Q 76 21 79 11 Q 94 18 104 31 Z" fill="${o.ear}" ${S}/><path d="M85 40 Q 83 25 85 18 Q 94 24 99 31 Z" fill="${o.earIn}"/><path d="M88 37 q2 -4 4 -6 M91 39 q3 -4 5 -5" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
-       `<path d="M116 31 Q 130 17 142 13 Q 142 31 139 49 Z" fill="${o.ear}" ${S}/><path d="M121 32 Q 131 22 138 19 Q 138 31 135 43 Z" fill="${o.earIn}"/><path d="M125 35 q4 -3 6 -3 M127 39 q4 -2 6 -2" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/>`];
-  const ey = o.persian ? 63 : 62, rx = o.persian ? 9.6 : 9.8, ry = o.persian ? 10.2 : 11, ex = [98, 123];
-  const eye = x => `<g>
-    <ellipse cx="${x}" cy="${ey}" rx="${rx}" ry="${ry}" fill="${o.eye}" stroke="${INK}" stroke-width="2.2"/>
-    <path d="M${x - rx + 1} ${ey - 1} Q${x} ${ey - ry - 1} ${x + rx - 1} ${ey - 1} Q${x} ${ey - ry * .35} ${x - rx + 1} ${ey - 1}Z" fill="${o.eyeDark}" opacity="${o.soft ? .6 : .85}"/>
-    <ellipse cx="${x + .6}" cy="${ey + .8}" rx="${rx * .42}" ry="${ry * (o.soft ? .66 : .72)}" fill="${INK}"/>
-    <circle cx="${x - rx * .3}" cy="${ey - ry * .36}" r="${rx * (o.soft ? .4 : .36)}" fill="#fff"/><circle cx="${x + rx * .38}" cy="${ey + ry * .42}" r="${o.soft ? 2 : 1.4}" fill="#fff"/>
-    ${o.soft
-      ? `<path d="M${x - rx - 1} ${ey - 2} Q${x} ${ey - ry - 3.5} ${x + rx + 1} ${ey - 2}" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M${x + rx} ${ey - 3} l3 -3" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`
-      : `<path d="M${x - rx - 1.5} ${ey - 2} Q${x} ${ey - ry - 4.5} ${x + rx + 1.5} ${ey - 3} l3.5 -2.5" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`}</g>`;
-  const ny = 74;
-  const headShade = o.soft ? 'M76 76 C 83 88 95 94 108 94 C 96 89 88 82 86 70 L78 68 Z' : 'M78 72 C 84 86 96 92 108 92 C 96 87 88 80 86 68 L80 67 Z';
-  return `<svg viewBox="0 0 160 130" aria-hidden="true">
-  ${o.mask ? `<defs><radialGradient id="poiMask" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#776f80" stop-opacity=".7"/><stop offset=".55" stop-color="#8b8393" stop-opacity=".35"/><stop offset="1" stop-color="#8b8393" stop-opacity="0"/></radialGradient></defs>` : ''}
-  <g class="up"><g class="tail-g">
-    <path d="${tail}" fill="${o.tail}"/>
-    <path d="M52 94 C 34 95 20 86 15 70 C 24 80 36 86 54 88 Z" fill="${o.tailShade}"/>
-    <path d="${tail}" fill="none" ${S}/>
-  </g></g>
-  ${leg('leg-fb', 50, 98, o.far)}${leg('leg-ff', 95, 98, o.far)}
-  <g class="up"><g class="breath">
-    <path d="${body}" fill="${o.fur}"/>
-    <path d="M47 101 C 60 110 96 112 111 99 C 107 109 95 114 78 114 Q 72 119 67 114 C 56 113 49 108 47 101Z" fill="${o.shade}"/>
-    ${o.stripes ? `<path d="M56 70 l3 12 M66 67 l2 13 M77 67 l1 12 M88 69 l-1 10" stroke="${o.stripes}" stroke-width="4" stroke-linecap="round"/>` : ''}
-    <path d="${ruff}" fill="${o.ruff}"/>
-    <path d="M60 80 l-4 3 M70 87 l-4 3 M84 80 l-4 3" stroke="${INK}" stroke-width="1.5" stroke-linecap="round" opacity="${o.soft ? .2 : .35}"/>
-    <path d="M60 73 C 66 70 74 69 82 70" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".55"/>
-    <path d="${body}" fill="none" ${S}/>
-  </g></g>
-  ${leg('leg-nb', 62, 100, o.fur)}${leg('leg-nf', 106, 100, o.fur, toes + claws)}
-  <g class="up"><g class="head">
-    <g class="ear ear-far">${ears[0]}</g><g class="ear ear-near">${ears[1]}</g>
-    <path d="${head}" fill="${o.fur}"/>
-    <path d="${headShade}" fill="${o.shade}"/>
-    ${o.mask ? `<ellipse cx="109" cy="71" rx="24" ry="19" fill="url(#poiMask)"/>` : ''}
-    ${o.stripes ? `<path d="M99 33 l3 9 l4 -7 l3 7 l4 -9" stroke="${o.stripes}" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M79 66 l8 2 M81 72 l7 0 M138 66 l-8 2" stroke="${o.stripes}" stroke-width="2.8" stroke-linecap="round"/>` : ''}
-    ${o.soft ? '' : `<path d="M90 44 l-3 3 M128 44 l3 3" stroke="${INK}" stroke-width="1.5" stroke-linecap="round" opacity=".35"/>`}
-    <path d="${head}" fill="none" ${S}/>
-    <g class="eyes-open">${eye(ex[0])}${eye(ex[1])}</g>
-    <g class="eyes-closed" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round">
-      ${o.soft ? `<path d="M${ex[0] - 7} ${ey} q7 6 14 0"/><path d="M${ex[1] - 7} ${ey} q7 6 14 0"/>` : `<path d="M${ex[0] - 7} ${ey + 1} l7 -6 l7 6"/><path d="M${ex[1] - 7} ${ey + 1} l7 -6 l7 6"/>`}</g>
-    ${o.soft ? `<ellipse cx="${ex[0] - 9}" cy="${ey + 13}" rx="6.5" ry="3.6" fill="#ff8fab" opacity=".5"/><ellipse cx="${ex[1] + 9}" cy="${ey + 12}" rx="6.5" ry="3.6" fill="#ff8fab" opacity=".5"/>` : ''}
-    <path d="M${ex[0] - 14} ${ey + 13} l3 -4 M${ex[0] - 10} ${ey + 13} l3 -4 M${ex[0] - 6} ${ey + 13} l3 -4 M${ex[1] + 5} ${ey + 12} l3 -4 M${ex[1] + 9} ${ey + 12} l3 -4 M${ex[1] + 13} ${ey + 12} l3 -4" stroke="#ff5f8a" stroke-width="${o.soft ? 1.6 : 2}" stroke-linecap="round"/>
-    <path d="M${o.persian ? 108 : 107.5} ${ny - 2} l${o.persian ? 5 : 6} 0 l-${o.persian ? 2.5 : 3} 3.8 z" fill="#ff7f9e" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round"/>
-    <path d="M${o.persian ? 105.5 : 105} ${ny + 4} q3 3 5.5 0 q3 3 5.5 0" stroke="${INK}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-    <path class="tongue" d="M108 ${ny + 6} q3 7 6 0 z" fill="#ff6a8e" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
-    <path d="M130 ${ny} l15 -4 M130 ${ny + 4} l15 1 M86 ${ny} l-15 -4 M86 ${ny + 4} l-15 1" stroke="${INK}" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>
-  </g></g>
-</svg>`;
-}
-
-function mohitSVG() {
-  const S = `stroke="${INK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"`;
-  const skin = '#f5cfb3', skinShade = '#e2ad8d', shirt = '#24202e', shirtLight = '#3a3449', pant = '#d9bf94', pantShade = '#bf9f72', hair = '#1f1820', hairHi = '#43354a';
-  const headD = 'M30 52 C 30 30 46 16 65 16 C 84 16 100 30 100 52 C 100 70 90 84 65 86 C 40 84 30 70 30 52 Z';
-  const fringe = 'M27 54 C 24 26 44 9 66 9 C 89 9 107 26 103 54 L97 43 L95 55 L89 40 L84 51 L79 38 L72 50 L68 36 L61 49 L56 37 L48 49 L45 37 L38 51 L35 42 L31 58 Z';
-  return `<svg viewBox="0 0 130 190" aria-hidden="true">
-  <g class="m-body">
-    <path d="M40 184 Q40 176 52 176 Q63 176 64 184 Z" fill="#2a2230" ${S}/><path d="M66 184 Q67 176 78 176 Q90 176 90 184 Z" fill="#2a2230" ${S}/>
-    <path d="M42 131 L64 131 L63 178 L45 178 Z" fill="${pant}" ${S}/><path d="M66 131 L88 131 L85 178 L67 178 Z" fill="${pant}" ${S}/>
-    <path d="M57 134 L63 134 L62.5 176 L58 176 Z M67 134 L73 134 L72 176 L67.5 176 Z" fill="${pantShade}"/>
-    <path d="M52 137 L53 174 M78 137 L77 174" stroke="${pantShade}" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M38 96 Q40 88 52 86 L78 86 Q90 88 92 96 L94 132 L36 132 Z" fill="${shirt}" ${S}/>
-    <path d="M80 88 Q90 90 92 98 L93.5 130 L84 130 Z" fill="${shirtLight}"/>
-    <path d="M65 94 L65 129" stroke="${shirtLight}" stroke-width="2"/>
-    <circle cx="65" cy="106" r="1.5" fill="#8f879c"/><circle cx="65" cy="116" r="1.5" fill="#8f879c"/><circle cx="65" cy="125" r="1.5" fill="#8f879c"/>
-    <rect x="37" y="127" width="57" height="6" fill="${INK}"/><rect x="60" y="126" width="10" height="8" rx="1.5" fill="#d7dae2" stroke="${INK}" stroke-width="1.5"/>
-    <path d="M58 86 L65 96 L72 86Z" fill="${skin}"/>
-    <path d="M50 86 L62 97 L60 85 Z M80 86 L68 97 L70 85 Z" fill="#2f2a3c" ${S}/>
-    <path d="M40 92 Q30 98 30 112 L33 128 L45 128 L43 112 Q44 104 47 98 Z" fill="${shirt}" ${S}/>
-    <path d="M33 127 L45 127" stroke="${shirtLight}" stroke-width="2.5"/>
-    <g class="m-arm">
-      <path d="M90 92 Q100 98 100 112 L98 126 L89 126 L89 112 Q88 104 85 98 Z" fill="${shirt}" ${S}/>
-      <path d="M93 98 Q99 104 99 112 L97.5 124 L93 124 Z" fill="${shirtLight}"/>
-      <rect x="89" y="118" width="10" height="5" rx="1.5" fill="#d7dae2" stroke="${INK}" stroke-width="1.4"/>
-      <path d="M89.5 126 Q88 135 94.5 136 Q100.5 135 98.5 126 Z" fill="${skin}" ${S}/>
-    </g>
-  </g>
-  <g class="m-head">
-    <path d="M24 60 C 18 30 40 8 66 8 C 92 8 112 28 106 62 L99 72 L97 58 L33 58 L31 72 Z" fill="${hair}" ${S}/>
-    <rect x="58" y="76" width="14" height="12" fill="${skinShade}"/>
-    <path d="M29 50 Q22 52 24 60 Q26 66 31 64 Z M101 50 Q108 52 106 60 Q104 66 99 64 Z" fill="${skin}" ${S}/>
-    <path d="${headD}" fill="${skin}"/>
-    <path d="M30 52 C 30 70 40 84 65 86 C 49 81 40 69 39 54 Z" fill="${skinShade}" opacity=".7"/>
-    <path d="${headD}" fill="none" ${S}/>
-    <path d="M40 73 l3 -4 M44 73 l3 -4 M48 73 l3 -4 M80 73 l3 -4 M84 73 l3 -4 M88 73 l3 -4" stroke="#ff7f9c" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>
-    <g class="m-eyes"><g class="m-pupils">
-      <ellipse cx="52" cy="59" rx="3.7" ry="4.8" fill="${INK}"/><ellipse cx="78" cy="59" rx="3.7" ry="4.8" fill="${INK}"/>
-      <circle cx="50.8" cy="57.4" r="1.4" fill="#fff"/><circle cx="76.8" cy="57.4" r="1.4" fill="#fff"/></g></g>
-    <path d="M45 48 l10 -1.5 M75 46.5 l10 1.5" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/>
-    <g class="m-glasses">
-      <rect x="41" y="49" width="22" height="19" rx="6" fill="rgba(255,255,255,.16)" stroke="#d6a640" stroke-width="2.6"/>
-      <rect x="67" y="49" width="22" height="19" rx="6" fill="rgba(255,255,255,.16)" stroke="#d6a640" stroke-width="2.6"/>
-      <path d="M63 55 Q65 53 67 55 M41 55 L31 53 M89 55 L99 53" stroke="#d6a640" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-      <path class="glint" d="M45 54 l5 -3 M71 54 l5 -3" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
-    </g>
-    <path class="m-mouth" d="M58 75 Q65 79.5 72 75" stroke="${INK}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <path class="m-mouth-open" d="M58 74 Q65 74 72 74 Q70 82 65 82 Q60 82 58 74Z" fill="#a8364f" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="${fringe}" fill="${hair}" ${S}/>
-    <path d="M42 22 L54 15 L49 27 Z M70 15 L84 18 L74 25 Z M92 26 L98 34 L90 33 Z" fill="${hairHi}"/>
-    <path d="M60 13 L57 30 M77 13 L81 31 M47 20 L41 34" stroke="${hairHi}" stroke-width="1.8" stroke-linecap="round"/>
-    <g class="m-fly"><path d="M58 11 Q54 1 45 3 M73 10 Q80 0 89 4 M66 9 Q66 2 70 -1" stroke="${hair}" stroke-width="3" fill="none" stroke-linecap="round"/></g>
-    <path class="sweat" d="M104 36 q6 9 0 12 q-6 -3 0 -12z" fill="#9fd8ff" stroke="${INK}" stroke-width="2"/>
-  </g>
-</svg>`;
-}
+const MOHIT_STATES = { idle: [['idle', 'idle', 'idle', 'blink'], 650], wave: [['hand', 'talk'], 220], glasses: [['talk'], 1000], flustered: [['hurt'], 1000] };
+const sprites = [];
 function makeSprite(kind) {
   const el = document.createElement('div');
   el.className = `sprite ${kind === 'mohit' ? 'mohit' : 'cat ' + kind} st-idle`;
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', { mohit: 'Mohit', poi: 'PoiPoi', mao: 'MaoMao' }[kind]);
-  el.innerHTML = `<div class="shadow"></div><div class="flip"><div class="squash">${kind === 'mohit' ? mohitSVG() : catSVG(CATS[kind])}</div></div><div class="bubble" hidden></div>`;
+  const [fw, fh] = DIMS[kind];
+  el.innerHTML = `<div class="shadow"></div><div class="flip"><div class="squash"><canvas class="pxs" width="${fw}" height="${fh}"></canvas></div></div><div class="bubble" hidden></div>`;
+  sprites.push({ el, kind, x: el.querySelector('canvas').getContext('2d'), shown: '' });
   return el;
+}
+function animateSprites(now) {
+  for (const s of sprites) {
+    if (!s.el.isConnected) continue;
+    const st = (s.el.className.match(/st-(\w+)/) || [])[1] || 'idle';
+    const table = s.kind === 'mohit' ? MOHIT_STATES : CAT_STATES;
+    const [list, ms] = table[st] || table.idle;
+    const name = list[Math.floor(now / ms) % list.length];
+    if (name === s.shown) continue;
+    s.shown = name;
+    s.x.clearRect(0, 0, s.x.canvas.width, s.x.canvas.height);
+    s.x.drawImage(FRAMES[s.kind][name], 0, 0);
+  }
+}
+
+/* ---------- pixel room behind the title ---------- */
+function buildRoom() {
+  const k = Math.max(2, Math.round(3 * u));
+  const aw = Math.ceil(W / k), ah = Math.ceil(H / k), floorY = Math.round(ah * 0.69);
+  const p = new Px(aw, ah, rng(5));
+  const cols = Math.ceil(aw / 16) + 1;
+  p.draw(paintGround(Array.from({ length: Math.ceil(floorY / 16) + 1 }, () => 'W'.repeat(cols)), 11), 0, 0);
+  p.draw(paintGround(Array.from({ length: Math.ceil((ah - floorY) / 16) + 1 }, () => 'o'.repeat(cols)), 12), 0, floorY);
+  p.r(0, floorY - 5, aw, 5, '#8a532c').r(0, floorY - 5, aw, 1, '#b5743f').r(0, floorY, aw, 1, '#2b2430');
+  for (let x = 0; x < aw; x++) p.p(x, 10 + Math.round(Math.abs(Math.sin((x / aw) * Math.PI * 3)) * 9), '#2b2430');
+  const bulbs = ['#ffd77a', '#ff9ec0', '#9fe8ff', '#fff1c9'];
+  for (let x = 4, i = 0; x < aw; x += 11, i++) {
+    const y = 11 + Math.round(Math.abs(Math.sin((x / aw) * Math.PI * 3)) * 9);
+    p.r(x, y, 2, 2, bulbs[i % 4]).p(x, y + 2, '#2b2430');
+  }
+  const put = (key, cx, base) => { const d = PIX[key], q = new Px(d.w, d.h, rng(key.length * 31)); d.draw(q); p.draw(q, Math.round(cx - d.w / 2), base - d.h); };
+  const pad = Math.max(4, Math.round(aw * 0.04));
+  const pianoX = aw - pad - 28;
+  const gap = pianoX - 28 - (pad + 62);
+  if (gap > 36) put('window', (pad + 62 + pianoX - 28) / 2, floorY - 22);
+  put('posterInk', pianoX - 2, floorY - 40);
+  put('desk', pad + 30, floorY + 6);
+  put('piano', pianoX, floorY + 4);
+  put('guitar', gap > 20 ? (pad + 62 + pianoX - 28) / 2 : pianoX - 30, floorY + 4);
+  put('chair', pad + 34, floorY + 18);
+  let cv = $('#pxbg');
+  if (!cv) { cv = document.createElement('canvas'); cv.id = 'pxbg'; stage.prepend(cv); }
+  cv.width = aw; cv.height = ah;
+  const x = cv.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.drawImage(p.cv, 0, 0);
 }
 
 /* ---------- entities ---------- */
@@ -239,13 +129,13 @@ function size() {
   W = stage.clientWidth; H = stage.clientHeight;
   u = clamp(Math.min(W, H * 0.62) / 420, 0.8, 1.35);
   for (const e of [mohit, poi, mao]) {
-    e.w = e.base * u; e.h = e.kind === 'mohit' ? e.w * 190 / 130 : e.w * 130 / 160;
+    const sc = Math.max(2, Math.round(PX_SCALE[e.kind] * u));
+    e.w = DIMS[e.kind][0] * sc; e.h = DIMS[e.kind][1] * sc;
     e.el.style.width = e.w + 'px'; e.el.style.height = e.h + 'px';
-    e.foot = e.kind === 'mohit' ? 0.975 : 0.955;
-    e.nose = e.kind === 'mohit' ? 0 : e.w * 0.24;
+    e.foot = e.kind === 'mohit' ? 0.985 : 0.97;
+    e.nose = e.kind === 'mohit' ? 0 : e.w * 0.3;
   }
   mohit.x = clamp(W * 0.75, mohit.w * 0.6, W - mohit.w * 0.6); mohit.y = H - 14 * u;
-  buildLights();
   buildRoom();
 }
 function setState(e, s) {
@@ -599,7 +489,7 @@ const PARTY = [
 ];
 function buildSheet() {
   sheet.innerHTML = `<div class="sheet-inner">
-    <div class="sheet-head"><div><h2>THE PARTY</h2><p>Art test v2.1 · tap the buttons to try each animation</p></div>
+    <div class="sheet-head"><div><h2>THE PARTY</h2><p>Tap the buttons to try each animation</p></div>
     <button class="btn close" type="button" id="bClose" aria-label="Close"><span>✕</span></button></div>
     <div class="cards">${PARTY.map((p, i) => `
       <article class="card" style="--role:${p.color};--box-1:${p.b1};--box-2:${p.b2};--tilt:${p.tilt}">
@@ -613,11 +503,11 @@ function buildSheet() {
           <div class="try"><span class="label">TRY:</span>${p.tries.map(([l, s]) => `<button type="button" data-i="${i}" data-s="${s}">${l}</button>`).join('')}</div>
         </div>
       </article>`).join('')}</div>
-    <p class="sheet-note">Everything is drawn in code, so every pose can move.</p></div>`;
+    <p class="sheet-note">Every pose is hand-placed pixel art.</p></div>`;
   PARTY.forEach((p, i) => {
     const sp = makeSprite(p.kind);
-    const w = p.kind === 'mohit' ? 120 : p.kind === 'poi' ? 186 : 140;
-    sp.style.width = w + 'px'; sp.style.height = (p.kind === 'mohit' ? w * 190 / 130 : w * 130 / 160) + 'px';
+    const sc = p.kind === 'mohit' ? 5 : p.kind === 'poi' ? 8 : 6;
+    sp.style.width = DIMS[p.kind][0] * sc + 'px'; sp.style.height = DIMS[p.kind][1] * sc + 'px';
     sp.querySelector('.bubble').remove();
     p.sprite = sp; p.state = 'idle';
     sheet.querySelector(`[data-slot="${i}"]`).appendChild(sp);
@@ -657,6 +547,7 @@ function frame(now) {
     for (const c of cats) think(c, now, dt);
   }
   for (const e of [mohit, poi, mao]) place(e);
+  animateSprites(now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

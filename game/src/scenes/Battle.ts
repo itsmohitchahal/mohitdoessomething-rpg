@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
-import { RES } from '../art/raster';
-import { state, colorLevel } from '../state';
+import { state, hazeLevel } from '../state';
+import { paintGround } from '../px/terrain';
+import { clock, grade } from '../daytime';
+
+const S = 4; // battle sprites are drawn bigger than in the world
 import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
 
@@ -24,30 +27,27 @@ export class Battle extends Phaser.Scene {
   create() {
     const cam = this.cameras.main;
     cam.setBackgroundColor('#140d1f');
-    if (this.renderer.type === Phaser.WEBGL) cam.postFX.addColorMatrix().saturate(colorLevel());
+    if (this.renderer.type === Phaser.WEBGL) cam.postFX.addColorMatrix().saturate(-0.42 * hazeLevel());
     this.fit();
     this.scale.on('resize', this.fit, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.fit, this));
 
     // kitchen backdrop, drawn wider than the box so wide screens are covered
-    const g = this.add.graphics();
-    g.fillStyle(0xcfd8e0).fillRect(-700, -400, BW + 1400, 640);
-    g.lineStyle(1, 0xb5c2cc);
-    for (let x = -700; x < BW + 700; x += 26) g.lineBetween(x, -400, x, 230);
-    for (let y = -400; y < 230; y += 26) g.lineBetween(-700, y, BW + 700, y);
-    g.fillStyle(0x9b98a8).fillRect(-700, 226, BW + 1400, 14);
-    g.lineStyle(3, 0x1b1325).lineBetween(-700, 226, BW + 700, 226).lineBetween(-700, 240, BW + 700, 240);
-    for (let y = 240, r = 0; y < BH + 400; y += 40, r++) for (let x = -720, c = 0; x < BW + 720; x += 40, c++) {
-      g.fillStyle((r + c) % 2 ? 0x5a5068 : 0x3a3346).fillRect(x, y, 40, 40);
+    if (!this.textures.exists('battle-bg')) {
+      const rows = Array.from({ length: 16 }, (_, j) => (j < 4 ? 'K' : j === 4 ? 'q' : 'y').repeat(34));
+      this.textures.addCanvas('battle-bg', paintGround(rows, 404).cv);
     }
-    g.fillStyle(0x1b1325, 0.35).fillEllipse(300, 318, 200, 46);
-    g.fillStyle(0x1b1325, 0.35).fillEllipse(120, 528, 190, 44);
-    this.add.image(330, 236, 'prop-shelf').setOrigin(0.5, 1).setScale(1.25 / RES);
-    this.add.image(70, 236, 'prop-fridge').setOrigin(0.5, 1).setScale(1.1 / RES);
-    this.add.rectangle(-700, -400, BW + 1400, BH + 800, 0x140d1f, 0.28).setOrigin(0);
+    this.add.image(BW / 2, -40, 'battle-bg').setOrigin(0.5, 0).setScale(S);
+    const shade = this.add.graphics();
+    shade.fillStyle(0x2b1e34, 0.3).fillEllipse(300, 316, 180, 36).fillEllipse(120, 528, 170, 34);
+    this.add.image(330, 238, 'pix-shelf').setOrigin(0.5, 1).setScale(S);
+    this.add.image(70, 238, 'pix-fridge').setOrigin(0.5, 1).setScale(S);
+    const g = grade(clock.min, true);
+    this.add.rectangle(-900, -600, BW + 1800, BH + 1200, g.tint).setOrigin(0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(90);
+    this.add.rectangle(-900, -600, BW + 1800, BH + 1200, 0x140d1f, 0.2).setOrigin(0).setDepth(91);
 
-    this.bag = this.add.sprite(300, 318, 'bag', 'idle').setOrigin(0.5, 0.97).setScale(1.6 / RES);
-    this.mohit = this.add.sprite(120, 530, 'mohit', 'idle').setOrigin(0.5, 0.97).setScale(1.55 / RES);
+    this.bag = this.add.sprite(300, 318, 'bag', 'idle').setOrigin(0.5, 0.95).setScale(S).setDepth(10);
+    this.mohit = this.add.sprite(120, 530, 'mohit', 'idle').setOrigin(0.5, 0.985).setScale(S).setDepth(10);
     this.mohit.play('m-idle');
     this.startWobble();
 
@@ -95,7 +95,7 @@ export class Battle extends Phaser.Scene {
   private wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(ms, r)); }
   private tween(cfg: Phaser.Types.Tweens.TweenBuilderConfig) { return new Promise<void>(r => this.tweens.add({ ...cfg, onComplete: () => r() })); }
   private pop(x: number, y: number, text: string, color = '#ffffff', size = 30) {
-    const t = this.add.text(x, y, text, { fontFamily: 'Lilita One', fontSize: size + 'px', color, stroke: '#1b1325', strokeThickness: 7, resolution: 3 })
+    const t = this.add.text(x, y, text, { fontFamily: '"Pixelify Sans", monospace', fontSize: size + 'px', color, stroke: '#2b2430', strokeThickness: 7 })
       .setOrigin(0.5).setDepth(100).setScale(0.3);
     this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, y: y - 20, delay: 900, duration: 400, onComplete: () => t.destroy() });
@@ -134,10 +134,10 @@ export class Battle extends Phaser.Scene {
     await this.tween({ targets: m, x: 330, y: 252, duration: 160 });
     sfx.thud(); this.cameras.main.shake(300, 0.014);
     m.stop(); m.setFrame('o');
-    const shelfHit = this.add.text(330, 120, '*CRASH*', { fontFamily: 'Lilita One', fontSize: '26px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 7, resolution: 3 }).setOrigin(0.5);
+    const shelfHit = this.add.text(330, 120, '*CRASH*', { fontFamily: '"Pixelify Sans", monospace', fontSize: '26px', color: '#ffc23c', stroke: '#2b2430', strokeThickness: 7 }).setOrigin(0.5);
     this.tweens.add({ targets: shelfHit, alpha: 0, delay: 600, duration: 300 });
     await this.wait(500);
-    const sack = this.add.image(330, -80, 'flour').setOrigin(0.5, 1).setScale(1.4 / RES).setDepth(50);
+    const sack = this.add.image(330, -80, 'pix-flour').setOrigin(0.5, 1).setScale(S).setDepth(50);
     sfx.whoosh();
     await this.tween({ targets: sack, y: 200, duration: 420, ease: 'Quad.easeIn' });
     sfx.thud(); sfx.hit();
@@ -173,12 +173,12 @@ export class Battle extends Phaser.Scene {
     for (let i = 0; i < 3; i++) { sfx.rustle(); await this.tween({ targets: bag, angle: { from: -6, to: 6 }, duration: 90, yoyo: true }); }
     // the bag tips over and out comes...
     sfx.whoosh();
-    const poi = this.add.sprite(bag.x, bag.y, 'poi', 'crumbs').setOrigin(0.5, 0.94).setScale(1.5 / RES).setFlipX(true).setDepth(5);
+    const poi = this.add.sprite(bag.x, bag.y, 'poi', 'crumbs').setOrigin(0.5, 0.94).setScale(S).setFlipX(true).setDepth(9);
     this.tween({ targets: bag, angle: 92, x: bag.x + 86, y: bag.y + 8, duration: 520, ease: 'Back.easeIn' });
     bag.setFrame('idle').setDepth(6);
     await this.tween({ targets: poi, y: poi.y - 24, duration: 200, yoyo: true, ease: 'Quad.easeOut' });
     for (let i = 0; i < 10; i++) {
-      const c = this.add.circle(poi.x + Phaser.Math.Between(-20, 20), poi.y - 50, Phaser.Math.Between(2, 4), 0xd9a35f).setStrokeStyle(1.5, 0x1b1325).setDepth(7);
+      const c = this.add.rectangle(poi.x + Phaser.Math.Between(-20, 20), poi.y - 50, S, S, 0xd9a35f).setDepth(7);
       this.tweens.add({ targets: c, x: c.x + Phaser.Math.Between(-60, 60), y: poi.y + Phaser.Math.Between(-6, 10), duration: 500, ease: 'Quad.easeIn', onComplete: () => this.tweens.add({ targets: c, alpha: 0, delay: 900, duration: 400 }) });
     }
     await this.say(["It's a cat.", 'A very fluffy cat. Covered in crumbs.', 'He was raiding the kitchen.']);

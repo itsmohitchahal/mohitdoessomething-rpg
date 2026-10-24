@@ -7,10 +7,11 @@ export interface SaveData {
   spawn: string;
   flags: Record<string, boolean>;
   deaths: number;
+  time?: number; // minute of the in-game day
 }
 
 const KEY = 'mds-save-v1';
-const fresh = (): SaveData => ({ v: 1, map: 'room', spawn: 'wake', flags: {}, deaths: 0 });
+const fresh = (): SaveData => ({ v: 1, map: 'room', spawn: 'wake', flags: {}, deaths: 0, time: 450 });
 
 export const state = {
   data: fresh(),
@@ -36,14 +37,13 @@ export const state = {
 };
 
 /**
- * How much colour the world has. The game starts very slightly desaturated and gains a little colour
- * with each milestone. It is meant to be noticed only when comparing the start and the end.
- * (Phaser's saturate(): 0 = normal colour, negative = less.)
+ * How hazy the world is (1 = thick winter haze, 0 = clear Delhi afternoon). The game starts hazy and
+ * the haze lifts a little with each milestone. It is meant to be noticed only when comparing the start and the end.
  */
-export function colorLevel(): number {
-  let v = -0.26;
-  if (state.flag('metPoi')) v += 0.05;
-  if (state.flag('fed')) v += 0.02;
-  if (state.flag('ch1Done')) v += 0.02;
+export function hazeLevel(): number {
+  let v = 1;
+  if (state.flag('metPoi')) v -= 0.08;
+  if (state.flag('fed')) v -= 0.04;
+  if (state.flag('ch1Done')) v -= 0.04;
   return v;
 }

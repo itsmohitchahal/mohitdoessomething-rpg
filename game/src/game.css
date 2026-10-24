@@ -124,3 +124,18 @@ html,body{margin:0}
   border:3px solid var(--mustard);box-shadow:3px 3px 0 var(--ink)}
 #gdialog.has-face .tag{left:104px}
 @media (max-width:420px){#gdialog.has-face{padding-left:88px}#gdialog .face{width:64px;height:64px}#gdialog.has-face .tag{left:88px}}
+
+/* pixel-art game UI: blocky font, square corners */
+#hud, #gdialog, #choices, #banner, #overlay, #battleui, #toast, #mute { --f-display: "Pixelify Sans", "DotGothic16", monospace; }
+#gdialog, #gdialog .tag, #gdialog .face, #choices button, .b-box, #overlay .ocard, #overlay .btn, #toast, #objective, #btnA, #mute, #clock, #pointer { border-radius: 0 !important; }
+#choices button, #overlay .btn { transform: none !important; }
+#choices button > span, #overlay .btn > span { transform: none !important; }
+#btnA { image-rendering: pixelated; }
+#gdialog .face { image-rendering: pixelated; }
+#clock { position:absolute; top:calc(12px + env(safe-area-inset-top,0px)); right:max(66px,calc(env(safe-area-inset-right,0px) + 66px));
+  font:600 15px/1 "Pixelify Sans", monospace; color:#fff; background:var(--navy); padding:8px 10px 7px; border:2px solid #fff; outline:2px solid var(--ink);
+  display:flex; align-items:center; gap:6px; pointer-events:none }
+#clock i { width:10px; height:10px; display:block; }
+#clock i.sun { background:#ffc23c; box-shadow:0 0 0 2px #ff9a3c; }
+#clock i.moon { background:#f4ead6; box-shadow:inset -3px -2px 0 #9fb3c8; }
+@media (max-width:420px){ #objective { max-width:calc(100% - 200px); font-size:12px } }

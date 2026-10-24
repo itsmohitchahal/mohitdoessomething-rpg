@@ -8,7 +8,7 @@
 <meta name="description" content="I had so much free time, I made a game about my billas.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;600;700&family=DotGothic16&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;600;700&family=DotGothic16&family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 /* Layout: one full-screen evening bedroom. Fairy lights on the wallpaper, the floral bedsheet as the floor,
    comic/JRPG UI on top, ink-and-cel characters roaming everywhere. Single committed (night) look. */
@@ -303,6 +303,14 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
 @media (prefers-reduced-motion: reduce){
   .sprite *, .logo span.l, .badge, #lights .bulb, #room *{animation:none !important}
 }
+
+/* pixel-art title */
+#stage{--f-display:"Pixelify Sans","Lilita One",monospace}
+#pxbg{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0}
+#lights,.halftone,.floor,#room{display:none !important}
+.sprite canvas.pxs{width:100%;height:100%;display:block;image-rendering:pixelated;filter:drop-shadow(0 3px 0 rgba(27,19,37,.28))}
+.stagebox .sprite canvas.pxs{filter:none}
+.logo .w1{letter-spacing:.04em}
 </style>
 </head>
 <body>
@@ -344,6 +352,7 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
   <button id="btnA" type="button" hidden></button>
   <div id="toast" hidden></div>
   <div id="pointer" hidden></div>
+  <div id="clock"></div>
 </div>
 <div id="battleui" hidden></div>
 <div id="gdialog" role="dialog" aria-live="polite" hidden></div>
