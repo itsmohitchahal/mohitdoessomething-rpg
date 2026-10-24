@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#2a1d4e">
+<title>Mohit Does Something</title>
+<meta name="description" content="I had so much free time, I turned my Insta into an RPG.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;600;700&family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+/* Layout: one full-screen evening bedroom. Fairy lights on the wallpaper, the floral bedsheet as the floor,
+   comic/JRPG UI on top, ink-and-cel characters roaming everywhere. Single committed (night) look. */
+:root{
+  --wall-1:#2a1d4e; --wall-2:#512b63; --ink:#1b1325; --paper:#fff8ec; --text:#fff3e0; --text-soft:#d8c7ef;
+  --hot:#ff4f8b; --mustard:#ffc23c; --mint:#36dcae; --sky:#5bb6ff; --lilac:#a98bff;
+  --wood:#6a4335; --skirting:#3b2546; --rug:#ff8fb6; --rug-2:#ffd1e1; --navy:#1c1842; --glow:#ffd77a;
+  --shade:rgba(27,19,37,.28); --laser:#ff2d55; --laser-glow:rgba(255,45,85,.5);
+  --f-display:"Lilita One","Arial Black",system-ui,sans-serif;
+  --f-body:"Rubik","Segoe UI",system-ui,sans-serif;
+  --f-pixel:"DotGothic16","Courier New",monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overflow:hidden;
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#stage{position:relative;height:100%;overflow:hidden;touch-action:manipulation;
+  background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 22px,transparent 22px 44px),
+    linear-gradient(180deg,var(--wall-1) 0%,var(--wall-2) 72%)}
+.halftone{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle,rgba(0,0,0,.28) 1.3px,transparent 1.9px) 0 0/9px 9px;
+  -webkit-mask-image:linear-gradient(180deg,transparent 25%,#000 75%);mask-image:linear-gradient(180deg,transparent 25%,#000 75%)}
+#lights{position:absolute;left:0;top:0;width:100%;height:140px;pointer-events:none;overflow:visible}
+#lights .wire{fill:none;stroke:#120c1c;stroke-width:2}
+#lights .bulb{animation:twinkle 2.4s steps(2) infinite}
+@keyframes twinkle{50%{opacity:.55}}
+
+/* the floor: wooden boards, a skirting board, and a pink rug where the cats play */
+.floor{position:absolute;left:0;right:0;bottom:0;height:31%;background-color:var(--wood);
+  background-image:radial-gradient(ellipse 70% 70% at 50% 0%,rgba(255,215,122,.16),transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='76'%3E%3Crect width='180' height='38' fill='%23704838'/%3E%3Crect y='38' width='180' height='38' fill='%23663f32'/%3E%3Cpath d='M0 37.5 H180 M0 75.5 H180 M120 0 V38 M50 38 V76' stroke='%232a1a22' stroke-width='3'/%3E%3Cpath d='M10 14 Q40 10 80 15 T110 13 M130 24 Q150 21 175 25 M8 54 Q30 50 44 55 M60 62 Q100 58 170 63' stroke='%238a5a46' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size:100% 100%,180px 76px}
+.floor::before{content:"";position:absolute;left:0;right:0;top:-12px;height:12px;background:var(--skirting);
+  border-top:3px solid var(--ink);border-bottom:3px solid var(--ink)}
+.floor::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(18,10,24,.45),transparent 45%);pointer-events:none}
+.rug{position:absolute;left:50%;bottom:8%;width:min(90%,580px);height:64%;transform:translateX(-50%);border-radius:50%;z-index:1;
+  background:var(--rug);border:3px solid var(--ink);
+  box-shadow:inset 0 0 0 7px var(--rug-2),inset 0 0 0 10px var(--ink),inset 0 0 0 18px var(--rug),inset 0 0 0 21px var(--rug-2),0 6px 0 rgba(0,0,0,.28)}
+
+/* Mohit's real room: desk setup, digital piano, guitar. Drawn against the wall, behind the characters. */
+#room{position:absolute;left:0;width:100%;overflow:visible;pointer-events:none;z-index:1}
+#room .rgb{animation:hue 2.6s linear infinite}
+#room .caret{animation:twinkle 1s steps(2) infinite}
+@keyframes hue{to{filter:hue-rotate(360deg)}}
+
+/* UI layer */
+.ui{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;pointer-events:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:clamp(54px,9vh,92px) 0}
+.ui > *{pointer-events:auto}
+.logo{margin:0;display:flex;flex-direction:column;align-items:center;line-height:.86;font-family:var(--f-display);
+  font-weight:400;text-align:center;position:relative;transform:rotate(-3deg)}
+.logo .w1{font-size:clamp(62px,19vw,118px);letter-spacing:.02em}
+.logo .w2{font-size:clamp(27px,8.4vw,52px);margin-top:6px}
+.logo span.l{display:inline-block;color:var(--c);cursor:pointer;
+  text-shadow:-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),2px 2px 0 var(--ink),
+    0 -2.5px 0 var(--ink),0 2.5px 0 var(--ink),-2.5px 0 0 var(--ink),2.5px 0 0 var(--ink),5px 6px 0 var(--ink);
+  animation:boil .5s steps(1) infinite;animation-delay:calc(var(--i)*-.07s)}
+.logo span.l.boing{animation:boing .45s cubic-bezier(.3,1.7,.5,1)}
+.logo .sp{display:inline-block;width:.25em}
+@keyframes boil{0%{transform:rotate(var(--r)) translateY(0)}50%{transform:rotate(calc(var(--r) * -1)) translateY(-1.5px)}}
+@keyframes boing{0%{transform:scale(1)}30%{transform:scale(1.4,.65)}60%{transform:scale(.8,1.3) translateY(-12px)}100%{transform:scale(1)}}
+.badge{position:absolute;right:-14px;top:-18px;transform:rotate(12deg);font:400 17px/1 var(--f-display);letter-spacing:.04em;
+  background:var(--mustard);color:var(--ink);padding:8px 12px 7px;border:3px solid var(--ink);border-radius:4px;
+  box-shadow:4px 4px 0 var(--ink);animation:badge 1.2s steps(1) infinite}
+@keyframes badge{50%{transform:rotate(8deg)}}
+
+.tagline{margin:18px 0 0;max-width:30ch;text-align:center;font-weight:600;font-size:15px;line-height:1.45;color:var(--text-soft);text-wrap:balance}
+.tagline a{color:var(--mustard);font-weight:700;text-decoration:none}
+
+.menu{margin-top:clamp(14px,3vh,26px);width:min(100%,340px);display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
+.btn{position:relative;font:400 17px/1 var(--f-display);letter-spacing:.03em;color:var(--ink);background:var(--paper);
+  border:3px solid var(--ink);border-radius:5px;padding:12px 6px 11px;cursor:pointer;transform:skewX(-8deg);
+  box-shadow:5px 5px 0 var(--ink);transition:transform .06s,box-shadow .06s;touch-action:manipulation}
+.btn > span{display:inline-flex;align-items:center;gap:8px;transform:skewX(8deg)}
+.btn:active,.btn.pressed{transform:skewX(-8deg) translate(4px,4px);box-shadow:1px 1px 0 var(--ink)}
+.btn:focus-visible{outline:3px solid var(--mustard);outline-offset:4px}
+.btn.primary{grid-column:1/-1;background:var(--hot);color:#fff;font-size:24px;padding:15px 10px 14px;
+  text-shadow:-1.5px -1.5px 0 var(--ink),1.5px -1.5px 0 var(--ink),-1.5px 1.5px 0 var(--ink),1.5px 1.5px 0 var(--ink),2px 3px 0 var(--ink)}
+.btn.primary svg{width:20px;height:20px}
+@media (hover:hover){
+  .btn::before{content:"▶";position:absolute;left:-26px;top:50%;transform:translateY(-50%) skewX(8deg);color:var(--mustard);
+    font-size:16px;opacity:0;text-shadow:2px 2px 0 var(--ink)}
+  .btn:hover::before{opacity:1;animation:cursor .5s steps(1) infinite}
+}
+@keyframes cursor{50%{left:-22px}}
+.hint{margin:18px 0 0;font:400 13px/1.2 var(--f-pixel);color:var(--text);background:var(--navy);padding:6px 10px;
+  border:2px solid #fff;outline:2px solid var(--ink);border-radius:3px;transition:opacity .6s}
+.hint .touch{display:none}
+@media (hover:none){.hint .mouse{display:none}.hint .touch{display:inline}}
+.hint.gone{opacity:0}
+
+/* Hinglish */
+.hi{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:help;position:relative;
+  text-decoration:underline dotted 2px;text-underline-offset:3px;text-decoration-color:var(--mustard)}
+.hi::after{content:attr(data-en);position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) scale(.8);
+  opacity:0;pointer-events:none;white-space:nowrap;font:600 13px/1 var(--f-body);color:var(--ink);background:var(--mustard);
+  padding:7px 9px;border:2.5px solid var(--ink);border-radius:4px;box-shadow:3px 3px 0 var(--ink);transition:opacity .12s,transform .12s;z-index:5}
+.hi.open::after{opacity:1;transform:translateX(-50%) scale(1)}
+@media (hover:hover){.hi:hover::after{opacity:1;transform:translateX(-50%) scale(1)}}
+
+/* sprites */
+#world{position:absolute;inset:0;z-index:3;pointer-events:none}
+.sprite{position:absolute;left:0;top:0;pointer-events:auto;will-change:transform;touch-action:manipulation;cursor:pointer}
+.sprite .flip,.sprite .squash{position:absolute;inset:0;transform-origin:50% 100%}
+.sprite svg{width:100%;height:100%;display:block;overflow:visible;filter:drop-shadow(3px 4px 0 var(--shade))}
+.sprite .shadow{position:absolute;left:20%;right:20%;bottom:2%;height:8%;border-radius:50%;background:var(--shade)}
+.sprite.mohit .shadow{bottom:-1.5%;height:5%;left:20%;right:20%}
+.sprite.land .squash{animation:squash .26s ease-out}
+@keyframes squash{0%{transform:scale(1.2,.78)}55%{transform:scale(.94,1.08)}100%{transform:scale(1)}}
+
+.bubble{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);margin-bottom:10px;width:max-content;max-width:210px;
+  font:600 13px/1.3 var(--f-body);color:var(--ink);background:#fff;padding:7px 10px;border:3px solid var(--ink);border-radius:10px;
+  box-shadow:3px 3px 0 var(--ink);text-align:center;pointer-events:none;animation:pop .22s cubic-bezier(.3,1.7,.5,1)}
+.bubble small{display:block;font:400 11px/1.3 var(--f-pixel);color:#6b5a78;margin-top:3px}
+.bubble::after{content:"";position:absolute;left:46%;top:100%;width:12px;height:12px;background:#fff;border-right:3px solid var(--ink);
+  border-bottom:3px solid var(--ink);transform:translateY(-6px) rotate(45deg) skew(12deg,12deg)}
+@keyframes pop{from{transform:translateX(-50%) scale(.3);opacity:0}}
+
+/* ---- cat parts ---- */
+.cat .tail-g{transform-origin:50px 90px;animation:swish 1.7s ease-in-out infinite alternate}
+@keyframes swish{from{transform:rotate(-10deg)}to{transform:rotate(12deg)}}
+.cat .breath{transform-origin:78px 114px;animation:breathe 2.6s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.02,1.045)}}
+.cat .leg{transform-box:fill-box;transform-origin:50% 10%;transition:transform .18s}
+.cat .up{transition:transform .2s}
+.cat .head{transform-origin:108px 92px;transition:transform .18s}
+.cat .ear{transform-box:fill-box;transition:transform .18s}
+.cat .ear-far{transform-origin:80% 100%}.cat .ear-near{transform-origin:20% 100%}
+.cat .eyes-open{transform-box:fill-box;transform-origin:center;animation:blink 4.1s infinite}
+@keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
+.cat .eyes-closed,.cat .tongue,.cat .claws{display:none}
+.sprite.mao .eyes-open{animation-delay:-1.9s}
+
+.st-walk .leg-fb,.st-walk .leg-nf,.st-run .leg-fb,.st-run .leg-nf,.st-sprint .leg-fb,.st-sprint .leg-nf{animation:legA .42s ease-in-out infinite alternate}
+.st-walk .leg-nb,.st-walk .leg-ff,.st-run .leg-nb,.st-run .leg-ff,.st-sprint .leg-nb,.st-sprint .leg-ff{animation:legA .42s ease-in-out infinite alternate-reverse}
+.st-run .leg{animation-duration:.25s !important}
+.st-sprint .leg{animation-duration:.16s !important}
+@keyframes legA{from{transform:rotate(34deg)}to{transform:rotate(-34deg)}}
+.st-walk .squash{animation:hop .42s ease-in-out infinite alternate}
+.st-run .squash{animation:hop .25s ease-in-out infinite alternate}
+.st-sprint .squash{animation:hopL .16s ease-in-out infinite alternate}
+@keyframes hop{to{transform:translateY(-4%)}}
+@keyframes hopL{from{transform:translateY(0) rotate(-3deg) scale(1.04,.96)}to{transform:translateY(-7%) rotate(3deg) scale(.97,1.04)}}
+.st-run .tail-g,.st-sprint .tail-g{animation:none;transform:rotate(28deg)}
+.st-walk .tail-g{animation-duration:.9s}
+
+.st-crouch .up{transform:translateY(7px)}
+.st-crouch .leg{transform:scaleY(.66)}
+.st-crouch .squash{transform-origin:78% 100%;animation:wiggle .17s ease-in-out infinite alternate}
+.st-crouch .tail-g{animation:swish .2s infinite alternate}
+.st-crouch .eyes-open{animation:none;transform:scale(1.14)}
+@keyframes wiggle{from{transform:rotate(-3.5deg)}to{transform:rotate(3.5deg)}}
+
+.st-air .leg-ff,.st-air .leg-nf{transform:rotate(-60deg)}
+.st-air .leg-fb,.st-air .leg-nb{transform:rotate(50deg)}
+.st-air .squash{transform:scale(.9,1.12)}
+
+.st-slap .leg-nf{animation:slapK .15s ease-in-out 4 alternate}
+.st-slap .claws{display:block}
+.st-slap .head{transform:rotate(-7deg)}
+.st-slap .eyes-open{animation:none;transform:scaleY(.6)}
+@keyframes slapK{from{transform:rotate(0)}to{transform:rotate(-108deg)}}
+
+.st-boop .head{animation:boopK .9s ease-in-out}
+.st-boop .eyes-open,.st-groom .eyes-open,.st-happy .eyes-open{display:none}
+.st-boop .eyes-closed,.st-groom .eyes-closed,.st-happy .eyes-closed{display:block}
+@keyframes boopK{30%{transform:translateX(8px) rotate(-9deg)}55%{transform:translateX(2px) rotate(5deg)}}
+
+.st-groom .up,.st-loaf .up,.st-distracted .up,.st-hide .up,.st-happy .up,.st-annoyed .up{transform:translateY(10px)}
+.st-groom .leg,.st-loaf .leg,.st-distracted .leg,.st-hide .leg,.st-happy .leg,.st-annoyed .leg{transform:scaleY(.26)}
+.st-groom .head{animation:groomK .42s ease-in-out infinite alternate}
+.st-groom .tongue{display:block}
+@keyframes groomK{from{transform:rotate(12deg)}to{transform:rotate(25deg)}}
+.st-distracted .head{transform:rotate(-16deg)}
+.st-distracted .eyes-open{animation:none;transform:scale(1.15)}
+.st-annoyed .eyes-open{animation:none;transform:scaleY(.42)}
+.st-annoyed .tail-g{animation:flick .13s infinite alternate}
+.st-annoyed .head{transform:rotate(-8deg)}
+@keyframes flick{from{transform:rotate(-16deg)}to{transform:rotate(28deg)}}
+.st-hide .ear-far{transform:rotate(-42deg)}
+.st-hide .ear-near{transform:rotate(42deg)}
+.st-hide .eyes-open{animation:none;transform:scaleY(.55)}
+.st-hide .squash{animation:shy 1.3s infinite}
+@keyframes shy{0%,40%,100%{transform:translateX(0)}10%{transform:translateX(-2px)}20%{transform:translateX(2px)}30%{transform:translateX(-1px)}}
+.st-happy .squash{animation:purr .08s linear infinite alternate}
+@keyframes purr{to{transform:translate(.7px,-.6px)}}
+.st-fight .squash{animation:fightK .1s linear infinite alternate}
+.st-fight .leg{animation:legA .1s infinite alternate}
+@keyframes fightK{from{transform:rotate(-14deg) translateX(-4px)}to{transform:rotate(14deg) translateX(4px)}}
+
+/* ---- mohit parts ---- */
+.mohit .m-body{transform-origin:65px 186px;animation:breathe 3s ease-in-out infinite}
+.mohit .m-head{transform-origin:65px 88px;animation:headbob 3s ease-in-out infinite}
+@keyframes headbob{50%{transform:translateY(1.5px) rotate(1.2deg)}}
+.mohit .m-eyes{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
+.mohit .m-pupils{animation:glance 8s ease-in-out infinite}
+@keyframes glance{0%,40%,100%{transform:translateX(0)}46%,60%{transform:translateX(2.2px)}66%,80%{transform:translateX(-2.2px)}}
+.mohit .m-fly{transform-origin:65px 14px;animation:fly 1.4s ease-in-out infinite alternate}
+@keyframes fly{from{transform:rotate(-5deg)}to{transform:rotate(6deg)}}
+.mohit .m-arm{transform-origin:90px 94px;transition:transform .2s}
+.mohit .sweat,.mohit .glint,.mohit .m-mouth-open{opacity:0}
+.st-wave .m-arm{animation:wave 1.1s ease-in-out}
+.st-wave .m-mouth{opacity:0}.st-wave .m-mouth-open{opacity:1}
+@keyframes wave{0%,100%{transform:rotate(0)}20%{transform:rotate(-148deg)}38%{transform:rotate(-128deg)}56%{transform:rotate(-152deg)}74%{transform:rotate(-130deg)}}
+.st-glasses .m-glasses{animation:glassesK .8s ease-in-out}
+.st-glasses .glint{animation:glint .8s ease-in-out}
+@keyframes glassesK{35%,65%{transform:translateY(-3.5px)}}
+@keyframes glint{40%,60%{opacity:1}}
+.st-flustered .sweat{opacity:1}
+.st-flustered .m-head{animation:shy .7s infinite}
+
+/* effects */
+.fx{position:absolute;left:0;top:0;pointer-events:none;z-index:2000;font:400 18px/1 var(--f-display);color:var(--hot);letter-spacing:.03em;
+  text-shadow:-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),2px 2px 0 var(--ink),3px 3px 0 var(--ink);
+  animation:floatUp .9s ease-out forwards;white-space:nowrap}
+.fx svg{display:block}
+.fx.stay{animation:stamp 1.3s ease-in forwards}
+.fx.burst{animation:stamp .7s ease-out forwards}
+.fx.tag{font:400 12px/1 var(--f-pixel);color:var(--ink);background:#fff;border:2px solid var(--ink);padding:4px 6px;border-radius:3px;text-shadow:none}
+@keyframes floatUp{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}18%{transform:translate(-50%,-90%) scale(1.2);opacity:1}100%{transform:translate(-50%,-210%) scale(1);opacity:0}}
+@keyframes stamp{0%{transform:translate(-50%,-50%) scale(1.6) rotate(-10deg);opacity:0}15%{transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1}70%{opacity:1}100%{transform:translate(-50%,-50%) scale(.9);opacity:0}}
+.dust{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:2px solid var(--ink);
+  pointer-events:none;animation:dust .45s ease-out forwards}
+@keyframes dust{to{transform:translate(var(--dx),-10px) scale(.2);opacity:0}}
+.laser{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--laser);
+  box-shadow:0 0 0 3px var(--laser-glow),0 0 16px 5px var(--laser-glow);pointer-events:none;opacity:0;transition:opacity .2s}
+.laser.on{opacity:1}
+.ripple{position:absolute;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:3px solid var(--laser);pointer-events:none;animation:ripple .45s ease-out forwards}
+@keyframes ripple{from{transform:scale(.2);opacity:1}to{transform:scale(1.4);opacity:0}}
+.fight{position:absolute;pointer-events:none;transform:translate(-50%,-78%)}
+.fight svg{width:100%;height:100%;overflow:visible;animation:fightCloud .12s steps(1) infinite}
+@keyframes fightCloud{50%{transform:scale(1.05,.96) rotate(2deg)}}
+.fight em{position:absolute;left:50%;bottom:-20px;transform:translateX(-50%);font:400 12px/1 var(--f-pixel);font-style:normal;color:var(--text);
+  background:var(--navy);padding:3px 6px;border:2px solid #fff;white-space:nowrap}
+
+/* JRPG dialog */
+#dialog{position:absolute;z-index:40;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));
+  bottom:calc(16px + env(safe-area-inset-bottom,0px));margin:0 auto;max-width:540px;background:var(--navy);color:#fff;
+  border:3px solid #fff;outline:3px solid var(--ink);border-radius:6px;padding:20px 20px 12px;font:400 18px/1.5 var(--f-pixel);
+  box-shadow:8px 8px 0 rgba(0,0,0,.35);animation:dlg .2s steps(3)}
+#dialog .tag{position:absolute;top:-16px;left:14px;background:var(--mustard);color:var(--ink);font:400 14px/1 var(--f-display);letter-spacing:.06em;
+  padding:6px 10px 5px;border:3px solid var(--ink);border-radius:3px}
+#dialog b{color:var(--mustard);font-weight:400}
+#dialog .next{display:block;text-align:right;color:var(--mustard);opacity:0;animation:nudge .5s steps(1) infinite}
+#dialog.done .next{opacity:1}
+@keyframes dlg{from{transform:scaleY(.1)}}
+@keyframes nudge{50%{transform:translateY(3px)}}
+
+/* party sheet */
+#sheet{position:absolute;inset:0;z-index:50;background:rgba(18,12,34,.9);overflow-y:auto;overscroll-behavior:contain}
+.sheet-inner{max-width:1060px;margin:0 auto;padding-block:24px 44px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px}
+.sheet-head h2{margin:0;font:400 clamp(30px,8vw,46px)/1 var(--f-display);color:var(--mustard);letter-spacing:.02em;
+  text-shadow:3px 3px 0 var(--ink),-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink)}
+.sheet-head p{margin:8px 0 0;font:400 14px/1.3 var(--f-pixel);color:var(--text-soft)}
+.close{flex:none;width:52px;height:48px;padding:0;font-size:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px 26px}
+.card{background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:8px;box-shadow:7px 7px 0 var(--role);
+  display:flex;flex-direction:column;min-width:0;transform:rotate(var(--tilt))}
+.card .band{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--role);border-bottom:3px solid var(--ink);padding:10px 14px 9px}
+.card h3{margin:0;font:400 30px/1 var(--f-display);color:#fff;letter-spacing:.02em;
+  text-shadow:-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),2px 2px 0 var(--ink),3px 3px 0 var(--ink)}
+.card .role{font:400 12px/1 var(--f-pixel);background:var(--ink);color:#fff;padding:5px 7px;border-radius:2px;white-space:nowrap}
+.stagebox{height:220px;display:grid;place-items:end center;padding-bottom:18px;position:relative;overflow:hidden;border-bottom:3px solid var(--ink);
+  background:repeating-linear-gradient(-45deg,var(--box-1) 0 14px,var(--box-2) 14px 28px)}
+.stagebox::after{content:"";position:absolute;left:0;right:0;bottom:0;height:30px;background:var(--wood);border-top:3px solid var(--ink)}
+.stagebox .sprite{position:relative;z-index:1;cursor:default}
+.card .body{padding:12px 14px 16px;display:flex;flex-direction:column;gap:11px}
+.card .facts{margin:0;font:400 13px/1.3 var(--f-pixel);color:#5d4d6b}
+.card .about{margin:0;font-size:15px;line-height:1.45;font-weight:500}
+.stats{display:grid;grid-template-columns:auto 1fr auto;gap:7px 10px;align-items:center;font:400 13px/1 var(--f-pixel)}
+.stats .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}
+.stats .bar i{height:11px;border:1.5px solid var(--ink);background:#fff}
+.stats .bar i.on{background:var(--role)}
+.stats .n{font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font:600 12.5px/1 var(--f-body);padding:6px 8px;border:2px solid var(--ink);border-radius:3px;background:#fff}
+.chips span.ult{background:var(--ink);color:var(--mustard)}
+.try{display:flex;flex-wrap:wrap;gap:8px}
+.try .label{font:400 12px/30px var(--f-pixel);color:#5d4d6b}
+.try button{font:400 14px/1 var(--f-display);letter-spacing:.03em;color:var(--ink);background:#fff;border:2.5px solid var(--ink);border-radius:3px;
+  padding:7px 9px 6px;cursor:pointer;box-shadow:3px 3px 0 var(--ink)}
+.try button:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+.try button:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+.sheet-note{margin:30px auto 0;max-width:60ch;text-align:center;font:400 13px/1.4 var(--f-pixel);color:var(--text-soft)}
+
+@media (prefers-reduced-motion: reduce){
+  .sprite *, .logo span.l, .badge, #lights .bulb, #room *{animation:none !important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="halftone"></div>
+  <svg id="lights" aria-hidden="true"></svg>
+  <div class="floor"><div class="rug"></div></div>
+  <svg id="room" aria-hidden="true"></svg>
+
+  <div class="ui">
+    <h1 class="logo" aria-label="mohit does something: the RPG">
+      <span class="w1" data-text="MOHIT"></span>
+      <span class="w2" data-text="does something"></span>
+      <span class="badge">THE RPG</span>
+    </h1>
+    <p class="tagline">I had so much free time, I turned my Insta into an RPG.
+      <br><a href="https://www.instagram.com/mohitdoessomething/" target="_blank" rel="noopener">@mohitdoessomething</a></p>
+    <nav class="menu" aria-label="Main menu">
+      <button class="btn primary" id="bStart" type="button"><span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="6" ry="5" fill="currentColor"/><circle cx="5.5" cy="9.5" r="2.4" fill="currentColor"/><circle cx="9.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="14.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="18.5" cy="9.5" r="2.4" fill="currentColor"/></svg>
+        START</span></button>
+      <button class="btn" id="bContinue" type="button"><span>Continue</span></button>
+      <button class="btn" id="bParty" type="button"><span>Party</span></button>
+      <button class="btn" id="bSettings" type="button"><span>Settings</span></button>
+    </nav>
+    <p class="hint" id="hint"><span class="mouse">Move your mouse. Click the cats.</span><span class="touch">Tap anywhere. Tap the cats.</span></p>
+  </div>
+
+  <div id="world"><div class="laser" id="laser"></div></div>
+  <div id="dialog" role="dialog" aria-live="polite" hidden></div>
+  <div id="sheet" role="dialog" aria-modal="true" aria-label="Meet the party" hidden></div>
+</div>
+
+<div id="game" hidden></div>
+<div id="hud" hidden>
+  <div id="objective" hidden></div>
+  <div id="joyzone"><div id="joybase"><div id="joyknob"></div></div></div>
+  <button id="btnA" type="button" hidden></button>
+  <div id="toast" hidden></div>
+</div>
+<div id="battleui" hidden></div>
+<div id="gdialog" role="dialog" aria-live="polite" hidden></div>
+<div id="choices" hidden></div>
+<div id="banner" hidden></div>
+<div id="overlay" hidden></div>
+<button id="mute" type="button" aria-label="Sound"></button>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>
