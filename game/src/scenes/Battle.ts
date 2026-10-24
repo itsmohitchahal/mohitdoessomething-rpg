@@ -114,7 +114,7 @@ export class Battle extends Phaser.Scene {
         { label: 'ITEMS', value: 'items' },
         { label: 'RUN', value: 'run' }
       ], 'battle');
-      if (c === 'items') await this.say(['Mohit checks his pockets.', '1 phone (3% battery). 1 hair tie.', 'Neither seems useful against a haunted bag.']);
+      if (c === 'items') await this.say(['Mohit checks his pockets.', 'A phone with 3% battery.', 'A Delhi Metro card with a balance of -₹20.', 'Neither seems useful against a haunted bag.']);
       else if (c === 'run') await this.say(['Mohit tries to run.', 'The kitchen door is stuck.', "(Also, he's kind of curious.)"]);
       else if (c === 'fight') return this.fight();
       else return this.befriend();

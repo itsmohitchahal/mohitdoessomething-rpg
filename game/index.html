@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#2a1d4e">
 <title>Mohit Does Something</title>
-<meta name="description" content="I had so much free time, I turned my Insta into an RPG.">
+<meta name="description" content="I had so much free time, I made a game about my billas.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;600;700&family=DotGothic16&display=swap" rel="stylesheet">
@@ -95,6 +95,9 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
   .btn:hover::before{opacity:1;animation:cursor .5s steps(1) infinite}
 }
 @keyframes cursor{50%{left:-22px}}
+.wip{margin:14px 0 0;max-width:290px;text-align:center;font:400 13px/1.35 var(--f-pixel);color:var(--ink);background:var(--mustard);
+  padding:7px 12px 6px;border:3px solid var(--ink);border-radius:4px;box-shadow:4px 4px 0 var(--ink);transform:rotate(-2deg)}
+.wip b{display:block;font:400 13px/1 var(--f-display);letter-spacing:.08em;margin-bottom:3px}
 .hint{margin:18px 0 0;font:400 13px/1.2 var(--f-pixel);color:var(--text);background:var(--navy);padding:6px 10px;
   border:2px solid #fff;outline:2px solid var(--ink);border-radius:3px;transition:opacity .6s}
 .hint .touch{display:none}
@@ -315,8 +318,9 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
       <span class="w2" data-text="does something"></span>
       <span class="badge">THE RPG</span>
     </h1>
-    <p class="tagline">I had so much free time, I turned my Insta into an RPG.
+    <p class="tagline">I had so much free time, I made a game about my <button type="button" class="hi" data-en="cats">billas</button>.
       <br><a href="https://www.instagram.com/mohitdoessomething/" target="_blank" rel="noopener">@mohitdoessomething</a></p>
+    <p class="wip"><b>WORK IN PROGRESS</b>MaoMao &amp; PoiPoi are working hard to finish it ASAP.</p>
     <nav class="menu" aria-label="Main menu">
       <button class="btn primary" id="bStart" type="button"><span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="6" ry="5" fill="currentColor"/><circle cx="5.5" cy="9.5" r="2.4" fill="currentColor"/><circle cx="9.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="14.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="18.5" cy="9.5" r="2.4" fill="currentColor"/></svg>
@@ -339,6 +343,7 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
   <div id="joyzone"><div id="joybase"><div id="joyknob"></div></div></div>
   <button id="btnA" type="button" hidden></button>
   <div id="toast" hidden></div>
+  <div id="pointer" hidden></div>
 </div>
 <div id="battleui" hidden></div>
 <div id="gdialog" role="dialog" aria-live="polite" hidden></div>

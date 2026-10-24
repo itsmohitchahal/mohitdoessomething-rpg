@@ -505,7 +505,7 @@ function idleBrain(now) {
 /* ---------- tapping characters ---------- */
 const POI_NO = ['PoiPoi does not like being touched.', 'PoiPoi is an independent cat. Please respect that.',
   'PoiPoi has left the chat.', 'No. (signed, PoiPoi)'];
-const MOHIT_LINES = ['Hi. Welcome to my Instagram. It\'s a game now.', 'I had a lot of free time.', 'The cats run this place. I just live here.',
+const MOHIT_LINES = ['Hi. I made a game about my cats.', 'I had a lot of free time.', 'The cats run this place. I just live here.',
   '*fixes glasses*', 'PoiPoi won\'t let me pick him up either.', 'Please follow. I have 44 followers to impress.'];
 let mohitLine = 0;
 function onCharTap(e, ev) {
@@ -580,7 +580,7 @@ $('#bParty').addEventListener('click', openSheet);
 const PARTY = [
   { kind: 'mohit', name: 'Mohit', role: 'THE HUMAN', color: '#ff4f8b', b1: '#ffd6e4', b2: '#ffc4d8', tilt: '-1deg',
     facts: 'Human · shirt + beige pants · gold glasses',
-    about: 'Had way too much free time and turned the whole Instagram into a game. Lives with two cats who are clearly in charge.',
+    about: 'Had way too much free time and made a whole game about his cats, who are clearly in charge.',
     stats: [['FREE TIME', 10], ['HAIR', 8], ['ATK', 3]],
     skills: ['Fix Glasses', 'Hair Flip', 'Coke Zero Chug', 'Post a Story'], ult: hi('Jugaad', 'a hacky, improvised fix'),
     tries: [['Idle', 'idle'], ['Wave', 'wave'], ['Fix glasses', 'glasses'], ['Getting groomed', 'flustered']] },
