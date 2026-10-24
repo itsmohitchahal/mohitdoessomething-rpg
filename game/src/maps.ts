@@ -12,6 +12,7 @@ type Ambient = 'wind' | 'drone' | 'gym' | 'hum' | null;
 export interface Spot {
   x: number; y: number; r: number;
   label: string;
+  door?: boolean;
   when?: (w: World) => boolean;
   run: (w: World) => Promise<void>;
 }
@@ -20,7 +21,7 @@ export interface MapDef {
   wall?: number;                        // interior back-wall height (not walkable)
   ambient: Ambient;
   draw: (g: G, w: World) => void;
-  props: { key: string; x: number; y: number; wall?: boolean }[];
+  props: { key: string; x: number; y: number; wall?: boolean; floor?: boolean }[];
   blocks?: [number, number, number, number][];
   spawns: Record<string, [number, number]>;
   spots: Spot[];
@@ -28,6 +29,8 @@ export interface MapDef {
   setup?: (w: World) => void;
   enter?: (w: World) => Promise<void>;
   update?: (w: World, dt: number) => void;
+  hints?: () => boolean;                       // sparkle over everything you can look at
+  target?: () => [number, number] | null;      // arrow over the next place to go
 }
 
 const f = (k: string) => state.flag(k);
@@ -37,8 +40,9 @@ const P = (text: string) => ({ who: 'POIPOI', text });
 export function objectiveText(): string | null {
   if (!f('woke')) return null;
   if (!f('cityIntro')) return 'Go outside';
-  if (!f('gym') && !f('cafe')) return 'Check the gym';
-  if (!f('cafe')) return 'Check the café';
+  if (!f('gym')) return 'Check the gym across the road';
+  if (!f('gymSearched')) return 'Look around the gym';
+  if (!f('cafe')) return 'Open the café with the keys';
   if (!f('metPoi')) return 'Check the café kitchen';
   if (!f('fed')) return 'Make the cat something to eat';
   if (!f('ch1Done')) return 'Explore the town with PoiPoi';
@@ -48,7 +52,7 @@ export function objectiveText(): string | null {
 /** A door: walks you to another map, unless PoiPoi has wandered off. */
 function door(x: number, y: number, to: MapName, spawn: string, label: string, check?: (w: World) => Promise<boolean>): Spot {
   return {
-    x, y, r: 42, label,
+    x, y, r: 42, label, door: true,
     run: async w => {
       if (w.poi?.distracted) { await w.say(M("Wait. Where's PoiPoi?")); return; }
       if (check && !(await check(w))) return;
@@ -59,15 +63,23 @@ function door(x: number, y: number, to: MapName, spawn: string, label: string, c
 const look = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], extra?: () => void, label = 'Look'): Spot =>
   ({ x, y, r, label, run: async w => { extra?.(); await w.say(lines); } });
 
-/* ---------- ground painters ---------- */
-function planks(g: G, x: number, y: number, w: number, h: number, base: number, line: number, gap = 24) {
-  g.fillStyle(base).fillRect(x, y, w, h);
-  g.lineStyle(2, line, 1);
-  for (let yy = y + gap, r = 0; yy < y + h; yy += gap, r++) {
-    g.lineBetween(x, yy, x + w, yy);
-    for (let xx = x + (r % 2 ? 40 : 90); xx < x + w; xx += 130) g.lineBetween(xx, yy - gap, xx, yy);
-  }
+/* ---------- gym: looking at anything turns up the café keys ---------- */
+async function foundKeys(w: World) {
+  sfx.sparkle(); w.emote(w.player, '!', '#ffc23c');
+  await w.wait(400);
+  await w.say(["Wait. There's something here.", 'A keyring shaped like a tiny teacup.', 'The tag says: <b>CHAI &amp; CRUMBS</b>.']);
+  await w.say(M('The café keys? Someone from the café was here...'));
+  state.set('gymSearched');
+  w.clearHints();
+  ui.objective(objectiveText());
+  ui.toast('You can open the café now.<small>It is across the road, on the south side.</small>', 4600);
 }
+const gymLook = (x: number, y: number, r: number, lines: Parameters<World['say']>[0]): Spot => ({
+  x, y, r, label: 'Look',
+  run: async w => { await w.say(lines); if (!f('gymSearched')) await foundKeys(w); }
+});
+
+/* ---------- ground painters ---------- */
 function checker(g: G, x: number, y: number, w: number, h: number, a: number, b: number, s: number) {
   for (let yy = 0; yy * s < h; yy++) for (let xx = 0; xx * s < w; xx++) {
     g.fillStyle((xx + yy) % 2 ? a : b).fillRect(x + xx * s, y + yy * s, Math.min(s, w - xx * s), Math.min(s, h - yy * s));
@@ -184,22 +196,56 @@ async function chapterEnd(w: World) {
 export const MAPS: Record<MapName, MapDef> = {
   room: {
     w: 460, h: 390, wall: 118, ambient: null, poiAllowed: true,
-    draw(g) {
-      backWall(g, 460, 120, 0x4a3a6e, 0x3b2546);
-      g.fillStyle(0x54437a);
-      for (let x = 0; x < 460; x += 22) g.fillRect(x, 0, 11, 110);
-      planks(g, 0, 120, 460, 270, 0x7a4f40, 0x5a3a2f);
-      g.fillStyle(0xffd1e1).fillEllipse(230, 285, 210, 108);
-      g.fillStyle(0xff8fb6).fillEllipse(230, 285, 190, 92);
-      g.lineStyle(3, 0x1b1325).strokeEllipse(230, 285, 210, 108);
+    draw(g, w) {
+      w.add.tileSprite(0, 0, 460, 108, 'tex-wallpaper').setOrigin(0).setTileScale(0.5).setDepth(-10001);
+      w.add.tileSprite(0, 120, 460, 270, 'tex-wood').setOrigin(0).setTileScale(0.5).setDepth(-10001);
+      g.fillStyle(0x3b2b58).fillRect(0, 0, 460, 9);
+      g.lineStyle(2, 0x1b1325).lineBetween(0, 9, 460, 9);
+      g.fillStyle(0x6b4434).fillRect(0, 106, 460, 14);
+      g.fillStyle(0x8a5a44).fillRect(0, 106, 460, 3);
+      g.lineStyle(3, 0x1b1325).lineBetween(0, 106, 460, 106).lineBetween(0, 120, 460, 120);
+      w.add.image(0, 120, 'wall-shade').setOrigin(0).setDisplaySize(460, 30).setDepth(-9500);
       mat(g, 230, 376);
     },
     props: [
-      { key: 'window', x: 240, y: 100, wall: true },
+      { key: 'rug', x: 226, y: 348, floor: true }, { key: 'slippers', x: 298, y: 386, floor: true },
+      { key: 'window', x: 240, y: 100, wall: true }, { key: 'posterInk', x: 340, y: 72, wall: true }, { key: 'wallshelf', x: 420, y: 62, wall: true },
       { key: 'desk', x: 110, y: 160 }, { key: 'chair', x: 116, y: 200 },
       { key: 'guitar', x: 236, y: 150 }, { key: 'piano', x: 340, y: 158 },
-      { key: 'bed', x: 380, y: 352 }, { key: 'plant', x: 440, y: 172 }
+      { key: 'bed', x: 380, y: 352 }, { key: 'plant', x: 440, y: 172 },
+      { key: 'laundry', x: 46, y: 364 }, { key: 'beanbag', x: 52, y: 272 },
+      { key: 'books', x: 206, y: 214 }, { key: 'backpack', x: 296, y: 216 }
     ],
+    setup(w) {
+      const ADD = Phaser.BlendModes.ADD;
+      // morning light from the window, with dust drifting in it
+      const beam = w.add.image(240, 30, 'light-beam').setOrigin(0.5, 0).setDisplaySize(176, 340).setBlendMode(ADD).setAlpha(0.2).setDepth(8000);
+      w.tweens.add({ targets: beam, alpha: 0.27, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      w.add.particles(0, 0, 'dust', {
+        x: { min: 178, max: 304 }, y: { min: 110, max: 340 }, lifespan: { min: 4000, max: 7000 },
+        speedX: { min: -4, max: 4 }, speedY: { min: -7, max: 2 }, scale: { start: 0.35, end: 0.08 },
+        alpha: { start: 0.8, end: 0 }, frequency: 240, blendMode: 'ADD'
+      }).setDepth(8001);
+      // the monitor and laptop are still on
+      w.add.image(140, 34, 'glow').setTint(0x7cc4ff).setBlendMode(ADD).setAlpha(0.4).setDisplaySize(130, 96).setDepth(-4000);
+      w.add.image(40, 58, 'glow').setTint(0x9fe8ff).setBlendMode(ADD).setAlpha(0.3).setDisplaySize(70, 50).setDepth(-4000);
+      // fairy lights along the top of the wall
+      const wire = w.add.graphics().setDepth(-4500);
+      wire.lineStyle(1.6, 0x120c1c);
+      const pts: [number, number][] = [];
+      for (let x = 0; x <= 460; x += 4) pts.push([x, 16 + Math.abs(Math.sin((x / 460) * Math.PI * 3)) * 14]);
+      wire.strokePoints(pts.map(([x, y]) => new Phaser.Math.Vector2(x, y)));
+      const cols = [0xffd77a, 0xff9ec0, 0x9fe8ff, 0xffd77a, 0xfff1c9];
+      for (let i = 0, x = 12; x < 460; x += 26, i++) {
+        const y = 18 + Math.abs(Math.sin((x / 460) * Math.PI * 3)) * 14;
+        const c = cols[i % cols.length];
+        const glow = w.add.image(x, y + 4, 'glow').setTint(c).setBlendMode(ADD).setAlpha(0.5).setDisplaySize(24, 24).setDepth(-4400);
+        w.add.circle(x, y + 4, 2.6, c).setStrokeStyle(1, 0x1b1325).setDepth(-4399);
+        w.tweens.add({ targets: glow, alpha: 0.2, duration: 900 + (i % 4) * 300, yoyo: true, repeat: -1, delay: (i * 170) % 1100 });
+      }
+      // soft shadow towards the corners
+      w.add.image(230, 205, 'vignette').setDisplaySize(620, 520).setAlpha(0.6).setDepth(9000);
+    },
     spawns: { wake: [292, 330], door: [230, 352] },
     spots: [
       look(90, 176, 52, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.']),
@@ -207,6 +253,9 @@ export const MAPS: Record<MapName, MapDef> = {
       { x: 236, y: 162, r: 34, label: 'Strum', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
       look(372, 300, 84, ['Mohit could go back to sleep...', '...but the silence is too loud.']),
       look(240, 132, 40, ['The street outside is completely empty.']),
+      look(340, 132, 30, ["A poster of The Ink Spots. 1939.", "Mohit's favourite song is still stuck in his head."]),
+      look(46, 360, 46, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."]),
+      look(52, 300, 40, ['The beanbag still has a Mohit-shaped dent in it.']),
       door(230, 380, 'city', 'apt', 'Go out')
     ],
     async enter(w) {
@@ -284,7 +333,13 @@ export const MAPS: Record<MapName, MapDef> = {
     spots: [
       door(300, 478, 'room', 'door', 'Go in'),
       door(1060, 478, 'gym', 'door', 'Enter'),
-      door(300, 920, 'cafe', 'door', 'Enter'),
+      door(300, 920, 'cafe', 'door', 'Enter', async w => {
+        if (f('gymSearched')) return true;
+        await w.say(['The café door is locked.', 'There is a note taped to it:', '"Gone to the gym. Back in 5 min."']);
+        await w.say(M('...The gym, then.'));
+        state.set('sawNote');
+        return false;
+      }),
       { x: 1280, y: 570, r: 80, label: 'Look', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
       look(110, 570, 80, ['Also closed.']),
       look(700, 104, 60, ['This one too. Suspicious.']),
@@ -294,6 +349,10 @@ export const MAPS: Record<MapName, MapDef> = {
       look(1090, 930, 74, ['The fountain is dry. Someone left a one-rupee coin in it.']),
       look(990, 1006, 44, ['A bench. Nobody to share it with.'])
     ],
+    target: () => !f('cityIntro') ? null
+      : !f('gymSearched') ? [1060, 408]
+      : !f('cafe') ? [300, 846]
+      : f('fed') && !f('ch1Done') ? [1300, 530] : null,
     setup(w) {
       // a plastic bag tumbles across the empty road now and then
       const bag = w.add.image(-40, 560, 'prop-plasticbag').setScale(1 / RES).setDepth(600);
@@ -312,6 +371,7 @@ export const MAPS: Record<MapName, MapDef> = {
       await w.wait(400);
       await w.say(['Mohit steps outside.', 'Nobody. Not a single person. Not even a stray dog.']);
       await w.say(M('...Where did everyone go?'));
+      await w.say(M("The gym across the road is always packed. Someone has to be there."));
       state.set('cityIntro');
       ui.objective(objectiveText());
     }
@@ -319,6 +379,7 @@ export const MAPS: Record<MapName, MapDef> = {
 
   gym: {
     w: 520, h: 400, wall: 120, ambient: 'gym',
+    hints: () => !f('gymSearched'),
     draw(g) {
       backWall(g, 520, 122, 0x5f6c7e, 0x3f4a5a);
       g.fillStyle(0xbcd7f0).fillRect(130, 20, 260, 80);
@@ -338,17 +399,18 @@ export const MAPS: Record<MapName, MapDef> = {
     ],
     spawns: { door: [260, 370] },
     spots: [
-      look(185, 200, 76, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.']),
-      look(395, 172, 52, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.']),
-      look(40, 152, 40, ['The gym playlist is still going.', 'Honestly, kind of a banger.']),
-      look(494, 172, 36, ['Free water. At least something still works.']),
-      look(400, 330, 56, ["Nobody's spotting anybody today."]),
+      gymLook(185, 200, 76, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.']),
+      gymLook(395, 172, 52, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.']),
+      gymLook(40, 152, 40, ['The gym playlist is still going.', 'Honestly, kind of a banger.']),
+      gymLook(494, 172, 36, ['Free water. At least something still works.']),
+      gymLook(400, 330, 56, ["Nobody's spotting anybody today."]),
       door(260, 392, 'city', 'gym', 'Go out')
     ],
     async enter(w) {
       if (f('gym')) return;
       await w.wait(300);
       await w.say(['The gym is empty.', 'The music is still playing. To nobody.']);
+      await w.say(M('Hm. Maybe someone left something behind.'));
       state.set('gym');
       ui.objective(objectiveText());
     }
@@ -356,6 +418,7 @@ export const MAPS: Record<MapName, MapDef> = {
 
   cafe: {
     w: 540, h: 420, wall: 122, ambient: 'hum',
+    target: () => f('cafe') && !f('metPoi') ? [460, 40] : null,
     draw(g) {
       backWall(g, 540, 124, 0xf0dcc0, 0xc98a5a);
       g.fillStyle(0xc98a5a).fillRect(0, 84, 540, 30);

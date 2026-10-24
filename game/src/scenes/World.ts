@@ -8,7 +8,8 @@ import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
 
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
-const SPEED = 140;
+// walking speed, rising to a jog after ~0.7s of continuous movement
+const WALK = 165, JOG = 240;
 
 type Sprite = Phaser.GameObjects.Sprite;
 
@@ -42,7 +43,7 @@ class Follower {
       if (acc >= 46) { tx = trail[i - 1].x; ty = trail[i - 1].y; break; }
     }
     const dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
-    const step = Math.min(d, (SPEED + 30) * dt);
+    const step = Math.min(d, (JOG + 30) * dt);
     if (d > 1.5) {
       s.x += dx / d * step; s.y += dy / d * step;
       if (Math.abs(dx) > 0.5) s.setFlipX(dx < 0);
@@ -93,12 +94,19 @@ export class World extends Phaser.Scene {
   private sat = colorLevel();
   private stepT = 0;
   private marker!: Phaser.GameObjects.Text;
+  private arrow!: Phaser.GameObjects.Text;
+  private pointer = document.querySelector('#pointer') as HTMLElement;
+  private hintObjs: Phaser.GameObjects.Text[] = [];
+  facing: 'down' | 'up' | 'side' = 'down';
+  private moveT = 0;
+  private lead = { x: 0, y: 0, tx: 0, ty: 0 };
 
   constructor() { super('World'); }
 
   init(data: { map: MapName; spawn: string }) {
     this.mapName = data.map; this.spawn = data.spawn; this.gen++;
     this.poi = null; this.trail = []; this.locked = false; this.followPaused = false; this.leaving = false; this.extra = {};
+    this.hintObjs = []; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
   }
 
   create() {
@@ -110,7 +118,7 @@ export class World extends Phaser.Scene {
 
     this.walls = this.physics.add.staticGroup();
     if (m.wall) this.block(0, 0, m.w, m.wall + 8);
-    for (const p of m.props) this.prop(p.key, p.x, p.y, p.wall);
+    for (const p of m.props) this.prop(p.key, p.x, p.y, p.wall, p.floor);
     for (const b of m.blocks ?? []) this.block(...b);
 
     const [sx, sy] = m.spawns[this.spawn] ?? Object.values(m.spawns)[0];
@@ -129,6 +137,10 @@ export class World extends Phaser.Scene {
       fontFamily: 'Lilita One', fontSize: '22px', color: '#ffffff', stroke: '#1b1325', strokeThickness: 6, resolution: 3
     }).setOrigin(0.5).setDepth(10001).setVisible(false);
     this.tweens.add({ targets: this.marker, scale: 1.2, yoyo: true, repeat: -1, duration: 380 });
+    this.arrow = this.add.text(0, 0, '▼', {
+      fontFamily: 'Lilita One', fontSize: '30px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 7, resolution: 3
+    }).setOrigin(0.5, 1).setDepth(10003).setVisible(false);
+    this.events.once('shutdown', () => { this.pointer.hidden = true; });
 
     const cam = this.cameras.main;
     cam.startFollow(this.player, true, 0.14, 0.14, 0, 20);
@@ -146,6 +158,7 @@ export class World extends Phaser.Scene {
     state.data.map = this.mapName; state.data.spawn = this.spawn; state.save();
 
     m.setup?.(this);
+    if (m.hints?.()) this.showHints();
     if (m.enter) this.cutscene(() => m.enter!(this));
   }
 
@@ -179,10 +192,10 @@ export class World extends Phaser.Scene {
     return z;
   }
 
-  prop(key: string, x: number, y: number, wall = false) {
+  prop(key: string, x: number, y: number, wall = false, floor = false) {
     const art = PROPS[key];
-    const img = this.add.image(x, y, 'prop-' + key).setOrigin(0.5, 1).setScale(1 / RES).setDepth(wall ? -5000 + y : y);
-    if (art.foot && !wall) this.block(x + art.foot[0], y + art.foot[1], art.foot[2], art.foot[3]);
+    const img = this.add.image(x, y, 'prop-' + key).setOrigin(0.5, 1).setScale(1 / RES).setDepth(floor ? -9000 : wall ? -5000 + y : y);
+    if (art.foot && !wall && !floor) this.block(x + art.foot[0], y + art.foot[1], art.foot[2], art.foot[3]);
     return img;
   }
 
@@ -197,21 +210,32 @@ export class World extends Phaser.Scene {
     const body = p.body as Phaser.Physics.Arcade.Body;
     let moving = false;
     if (!this.locked && !ui.busy && !this.leaving) {
-      const mv = input.move;
-      body.setVelocity(mv.x * SPEED, mv.y * SPEED);
-      moving = Math.hypot(mv.x, mv.y) > 0.05;
+      const mv = input.move, mag = Math.hypot(mv.x, mv.y);
+      moving = mag > 0.05;
       if (moving) {
-        if (Math.abs(mv.x) > 0.1) p.setFlipX(mv.x < 0);
-        if (p.anims.currentAnim?.key !== 'm-walk') p.play('m-walk');
-        p.anims.timeScale = 0.6 + Math.hypot(mv.x, mv.y) * 0.5;
-        this.stepT -= dt;
-        if (this.stepT <= 0) { sfx.step(); this.stepT = 0.32; }
-      } else if (p.anims.currentAnim?.key === 'm-walk') p.play('m-idle');
+        this.moveT += dt;
+        const jog = mag > 0.8 ? Phaser.Math.Clamp((this.moveT - 0.7) / 0.5, 0, 1) : 0;
+        const speed = WALK + (JOG - WALK) * jog;
+        body.setVelocity(mv.x * speed, mv.y * speed);
+        this.face(mv.x, mv.y);
+        const key = this.animFor(true);
+        if (p.anims.currentAnim?.key !== key) p.play(key);
+        p.anims.timeScale = (0.8 + 0.4 * mag) * (1 + jog * 0.45);
+        this.stepT -= dt * (1 + jog * 0.5);
+        if (this.stepT <= 0) { sfx.step(); this.stepT = 0.3; if (jog > 0.5) this.puff(p.x, p.y); }
+        this.lead.tx = mv.x * 46; this.lead.ty = mv.y * 34;
+      } else {
+        this.stop();
+      }
     } else if (!this.locked) {
-      body.setVelocity(0, 0);
-      if (p.anims.currentAnim?.key === 'm-walk') p.play('m-idle');
+      this.stop();
     }
     p.setDepth(p.y);
+    // the camera drifts slightly ahead of where Mohit is walking
+    const k = Math.min(1, dt * 2.2);
+    this.lead.x += (this.lead.tx - this.lead.x) * k; this.lead.y += (this.lead.ty - this.lead.y) * k;
+    this.cameras.main.setFollowOffset(-this.lead.x, 20 - this.lead.y);
+    this.updateTarget();
 
     const last = this.trail[this.trail.length - 1];
     if (!last || Phaser.Math.Distance.Between(last.x, last.y, p.x, p.y) > 2) {
@@ -233,6 +257,59 @@ export class World extends Phaser.Scene {
     }
   }
 
+  private stop() {
+    const p = this.player;
+    (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.moveT = 0; this.lead.tx = 0; this.lead.ty = 0;
+    if (p.anims.currentAnim?.key.startsWith('m-walk')) p.play(this.animFor(false));
+  }
+
+  /** Picks the front, back or side view from the direction of movement. */
+  face(x: number, y: number) {
+    if (Math.abs(x) > Math.abs(y) * 0.9) { this.facing = 'side'; this.player.setFlipX(x < 0); }
+    else { this.facing = y < 0 ? 'up' : 'down'; this.player.setFlipX(false); }
+  }
+  animFor(walking: boolean) {
+    const f = this.facing;
+    if (walking) return f === 'up' ? 'm-walk-up' : f === 'side' ? 'm-walk-side' : 'm-walk';
+    return f === 'up' ? 'm-idle-up' : f === 'side' ? 'm-idle-side' : 'm-idle';
+  }
+
+  private puff(x: number, y: number) {
+    for (let i = 0; i < 2; i++) {
+      const c = this.add.circle(x + Phaser.Math.Between(-8, 8), y - 2, Phaser.Math.Between(3, 5), 0xffffff, 0.55).setDepth(y - 1);
+      this.tweens.add({ targets: c, y: y - 10, scale: 0.2, alpha: 0, duration: 420, onComplete: () => c.destroy() });
+    }
+  }
+
+  /** Sparkles over everything you can look at (used to nudge the player). */
+  showHints() {
+    for (const s of this.def.spots) {
+      if (s.door) continue;
+      const t = this.add.text(s.x, s.y - 50, '✦', {
+        fontFamily: 'Lilita One', fontSize: '20px', color: '#ffc23c', stroke: '#1b1325', strokeThickness: 5, resolution: 3
+      }).setOrigin(0.5).setDepth(10000);
+      this.tweens.add({ targets: t, y: t.y - 7, alpha: 0.55, yoyo: true, repeat: -1, duration: 620, delay: Phaser.Math.Between(0, 400) });
+      this.hintObjs.push(t);
+    }
+  }
+  clearHints() { this.hintObjs.forEach(h => h.destroy()); this.hintObjs = []; }
+
+  /** Bouncing arrow over the next place to go, plus an edge-of-screen pointer when it's off camera. */
+  private updateTarget() {
+    const t = this.locked || ui.busy ? null : this.def.target?.() ?? null;
+    if (!t) { this.arrow.setVisible(false); this.pointer.hidden = true; return; }
+    this.arrow.setVisible(true).setPosition(t[0], t[1] + Math.sin(this.time.now / 180) * 5);
+    const cam = this.cameras.main, v = cam.worldView;
+    if (t[0] > v.x + 20 && t[0] < v.right - 20 && t[1] > v.y + 30 && t[1] < v.bottom - 20) { this.pointer.hidden = true; return; }
+    const dpr = DPR(), z = cam.zoom / dpr, cssW = this.scale.width / dpr, cssH = this.scale.height / dpr;
+    const dx = (t[0] - cam.midPoint.x) * z, dy = (t[1] - cam.midPoint.y) * z;
+    const kx = (cssW / 2 - 40) / Math.max(Math.abs(dx), 1e-3), ky = (cssH / 2 - 80) / Math.max(Math.abs(dy), 1e-3);
+    const s = Math.min(kx, ky, 1);
+    this.pointer.hidden = false;
+    this.pointer.style.transform = `translate(${cssW / 2 + dx * s}px, ${cssH / 2 + dy * s}px) rotate(${Math.atan2(dy, dx)}rad)`;
+  }
+
   private nearest(): Spot | null {
     const p = this.player;
     let best: Spot | null = null, bd = Infinity;
@@ -250,7 +327,8 @@ export class World extends Phaser.Scene {
     const gen = this.gen;
     this.locked = true;
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (this.player.anims.currentAnim?.key === 'm-walk') this.player.play('m-idle');
+    if (this.player.anims.currentAnim?.key.startsWith('m-walk')) this.player.play(this.animFor(false));
+    this.moveT = 0; this.lead.tx = this.lead.ty = 0;
     input.setAction(null); this.marker.setVisible(false);
     // a cutscene that changed map finishes after the restart; it must not unlock the new map's cutscene
     try { await fn(); } finally { if (gen === this.gen) this.locked = false; }
@@ -259,16 +337,17 @@ export class World extends Phaser.Scene {
   say(lines: Line[] | Line) { return ui.say(lines); }
   wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(ms, r)); }
 
-  walk(s: Sprite, x: number, y: number, speed = 90, walkAnim?: string, idleAnim?: string) {
+  walk(s: Sprite, x: number, y: number, speed = 130, walkAnim?: string, idleAnim?: string) {
     const d = Phaser.Math.Distance.Between(s.x, s.y, x, y);
     if (d < 1) return Promise.resolve();
-    const isPoi = s.texture.key === 'poi';
-    if (Math.abs(x - s.x) > 1) s.setFlipX(x < s.x);
-    s.play(walkAnim ?? (isPoi ? 'p-walk' : 'm-walk'));
+    const isPoi = s.texture.key === 'poi', isMohit = s === this.player;
+    if (isMohit) this.face(x - s.x, y - s.y);
+    else if (Math.abs(x - s.x) > 1) s.setFlipX(x < s.x);
+    s.play(walkAnim ?? (isPoi ? 'p-walk' : isMohit ? this.animFor(true) : 'm-walk'));
     return new Promise<void>(r => this.tweens.add({
       targets: s, x, y, duration: (d / speed) * 1000,
       onUpdate: () => s.setDepth(s.y),
-      onComplete: () => { s.play(idleAnim ?? (isPoi ? 'p-idle' : 'm-idle')); r(); }
+      onComplete: () => { s.play(idleAnim ?? (isPoi ? 'p-idle' : isMohit ? this.animFor(false) : 'm-idle')); r(); }
     }));
   }
 

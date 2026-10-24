@@ -12,6 +12,7 @@ class UI {
   private choicesEl = $('#choices');
   private advanceFn: (() => void) | null = null;
   private talking = 0;
+  private faces: Record<string, string> = {};
   private modal = 0;
 
   constructor() {
@@ -21,6 +22,8 @@ class UI {
       this.advance();
     });
   }
+
+  setPortraits(p: Record<string, string>) { this.faces = p; }
 
   get busy() { return this.talking > 0 || this.modal > 0; }
   get isTalking() { return this.talking > 0 && !!this.advanceFn; }
@@ -41,8 +44,10 @@ class UI {
 
   private line({ who, text }: { who: string; text: string }) {
     return new Promise<void>(resolve => {
-      this.dlg.innerHTML = `${who ? `<span class="tag">${who}</span>` : ''}<div class="txt">${text}</div><span class="next">▼</span>`;
+      const face = who && this.faces[who];
+      this.dlg.innerHTML = `${who ? `<span class="tag">${who}</span>` : ''}${face ? `<img class="face" alt="" src="${face}">` : ''}<div class="txt">${text}</div><span class="next">▼</span>`;
       this.dlg.classList.toggle('narration', !who);
+      this.dlg.classList.toggle('has-face', !!face);
       this.dlg.classList.remove('done');
       this.dlg.hidden = false;
       const nodes: { n: Text; full: string }[] = [];

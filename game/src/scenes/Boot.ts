@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { bake } from '../art/raster';
 import { mohitSVG, catSVG, bagSVG, POI, FLOUR_SVG, BOWL_SVG, HEART_SVG, type MohitPose, type CatPose, type BagPose } from '../art/chars';
 import { PROPS } from '../art/props';
+import { mohitBackSVG, mohitSideSVG, portrait, type SidePose } from '../art/mohitViews';
+import { makeTextures } from '../art/textures';
+import { ui } from '../ui';
 
 const map = <P,>(poses: Record<string, P>, fn: (p: P) => string) =>
   Object.fromEntries(Object.entries(poses).map(([k, p]) => [k, fn(p)]));
@@ -11,6 +14,10 @@ const MOHIT: Record<string, MohitPose> = {
   walkA: { legL: 5, bob: 1.5, arm: 8 }, walkB: { legR: 5, bob: 1.5, arm: -8 },
   o: { mouth: 'o', worried: true }, hand: { arm: -80, mouth: 'flat' },
   hurt: { blink: true, mouth: 'o', sweat: true, worried: true }, talk: { mouth: 'open' }
+};
+const MOHIT_BACK: Record<string, MohitPose> = { bIdle: {}, bWalkA: { legL: 5, bob: 1.5, arm: 8 }, bWalkB: { legR: 5, bob: 1.5, arm: -8 } };
+const MOHIT_SIDE: Record<string, SidePose> = {
+  sIdle: {}, sBlink: { blink: true }, sMid: { bob: 0.5 }, sWalkA: { stride: 22, bob: 1.5 }, sWalkB: { stride: -22, bob: 1.5 }, sTalk: { mouth: 'open' }
 };
 const CAT: Record<string, CatPose> = {
   idle: { tail: -6 }, idle2: { tail: 10, head: -3 }, blink: { tail: -6, eyes: 'closed' },
@@ -28,7 +35,7 @@ export class Boot extends Phaser.Scene {
 
   async create() {
     await Promise.all([
-      bake(this, 'mohit', map(MOHIT, mohitSVG), 52),
+      bake(this, 'mohit', { ...map(MOHIT, mohitSVG), ...map(MOHIT_BACK, mohitBackSVG), ...map(MOHIT_SIDE, mohitSideSVG) }, 52),
       bake(this, 'poi', map(CAT, p => catSVG(POI, p)), 66),
       bake(this, 'bag', map(BAG, bagSVG), 84),
       bake(this, 'flour', { base: FLOUR_SVG }, 46),
@@ -36,9 +43,18 @@ export class Boot extends Phaser.Scene {
       bake(this, 'heart', { base: HEART_SVG }, 20),
       ...Object.entries(PROPS).map(([k, a]) => bake(this, 'prop-' + k, { base: a.svg }, a.w))
     ]);
+    makeTextures(this);
+    ui.setPortraits({
+      MOHIT: portrait(mohitSVG({ mouth: 'open' }), '14 -10 102 102'),
+      POIPOI: portrait(catSVG(POI, { eyes: 'big' }), '58 4 100 100')
+    });
     const fr = (key: string, frame: string, duration?: number) => ({ key, frame, duration });
     this.anims.create({ key: 'm-idle', repeat: -1, frames: [fr('mohit', 'idle', 2600), fr('mohit', 'blink', 120), fr('mohit', 'idle', 1700), fr('mohit', 'blink', 120)] });
     this.anims.create({ key: 'm-walk', repeat: -1, frameRate: 8, frames: ['walkA', 'idle', 'walkB', 'idle'].map(f => fr('mohit', f)) });
+    this.anims.create({ key: 'm-walk-up', repeat: -1, frameRate: 8, frames: ['bWalkA', 'bIdle', 'bWalkB', 'bIdle'].map(f => fr('mohit', f)) });
+    this.anims.create({ key: 'm-idle-up', repeat: -1, frames: [fr('mohit', 'bIdle', 3000)] });
+    this.anims.create({ key: 'm-walk-side', repeat: -1, frameRate: 8, frames: ['sWalkA', 'sMid', 'sWalkB', 'sMid'].map(f => fr('mohit', f)) });
+    this.anims.create({ key: 'm-idle-side', repeat: -1, frames: [fr('mohit', 'sIdle', 2400), fr('mohit', 'sBlink', 120)] });
     this.anims.create({ key: 'p-idle', repeat: -1, frames: [fr('poi', 'idle', 1500), fr('poi', 'idle2', 1500), fr('poi', 'blink', 120)] });
     this.anims.create({ key: 'p-walk', repeat: -1, frameRate: 10, frames: ['walk0', 'walk1', 'walk2', 'walk1'].map(f => fr('poi', f)) });
     this.anims.create({ key: 'p-loaf', repeat: -1, frames: [fr('poi', 'loaf', 2400), fr('poi', 'loafBlink', 140)] });

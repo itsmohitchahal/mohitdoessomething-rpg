@@ -294,5 +294,63 @@ export const PROPS: Record<string, PropArt> = {
     <path d="M10 22 L104 14 L126 60 Q70 70 18 62 Z" fill="#c08a52" ${S(3)}/>
     <path d="M104 14 Q122 22 126 60 Q118 34 104 14 Z" fill="#24160f" ${S(2.4)}/>
     <path d="M30 34 l10 6 M60 48 l12 -6" stroke="#8a5c2e" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>` },
+  /* ---------------- room clutter (style test) ---------------- */
+  rug: { w: 200, svg: `<svg viewBox="0 0 200 104">
+    ${Array.from({ length: 14 }, (_, i) => `<path d="M2 ${12 + i * 6} h12 M186 ${12 + i * 6} h12" stroke="#f5e6c8" stroke-width="2.6" stroke-linecap="round"/>`).join('')}
+    <rect x="12" y="6" width="176" height="92" rx="4" fill="#c94f6d" ${S(3)}/>
+    <rect x="22" y="14" width="156" height="76" rx="2" fill="none" stroke="#ffd1a0" stroke-width="4"/>
+    <rect x="30" y="22" width="140" height="60" rx="2" fill="#e8738f"/>
+    <path d="M100 34 L126 52 L100 70 L74 52 Z" fill="#ffd1a0" ${S(2)}/><path d="M100 44 L112 52 L100 60 L88 52 Z" fill="#c94f6d"/>
+    ${[[44, 34], [156, 34], [44, 70], [156, 70]].map(([x, y]) => `<path d="M${x} ${y - 7} L${x + 7} ${y} L${x} ${y + 7} L${x - 7} ${y} Z" fill="#ffd1a0" stroke="${INK}" stroke-width="1.5"/>`).join('')}
+    <path d="M30 22 L170 22" stroke="#fff" stroke-width="2" opacity=".25"/>
+  </svg>` },
+  laundry: { w: 58, foot: [-24, -12, 48, 12], svg: `<svg viewBox="0 0 60 42">
+    ${shadow(30, 38, 27, 4)}
+    <path d="M6 36 Q3 24 15 21 Q23 12 34 18 Q48 13 54 26 Q59 35 52 37 Z" fill="#5b7fb8" ${S(2.6)}/>
+    <path d="M14 30 q8 -3 14 0 M36 26 q6 2 10 6" stroke="#46679c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M18 23 L24 16 L32 19 L40 14 L45 22 L39 24 L37 31 L25 31 L25 25 Z" fill="#ff8fb6" ${S(2.2)}/>
+    <path d="M41 31 q6 -6 11 -2 q-2 7 -9 6 z" fill="#ffffff" ${S(2)}/>
+  </svg>` },
+  beanbag: { w: 72, foot: [-28, -16, 56, 14], svg: `<svg viewBox="0 0 72 58">
+    ${shadow(36, 54, 32, 5)}
+    <path d="M8 46 Q2 24 20 14 Q36 4 52 14 Q70 26 64 46 Q60 56 36 56 Q12 56 8 46 Z" fill="#6a5794" ${S(3)}/>
+    <path d="M22 30 Q36 22 50 30 Q44 38 36 38 Q28 38 22 30 Z" fill="#584781"/>
+    <path d="M18 20 Q26 12 38 12" stroke="#8a77b5" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </svg>` },
+  backpack: { w: 38, foot: [-14, -8, 28, 8], svg: `<svg viewBox="0 0 40 48">
+    ${shadow(20, 45, 16, 3)}
+    <path d="M12 10 Q12 4 20 4 Q28 4 28 10" stroke="${INK}" stroke-width="3" fill="none"/>
+    <rect x="6" y="9" width="28" height="36" rx="9" fill="#e0a83a" ${S(2.6)}/>
+    <rect x="10" y="26" width="20" height="14" rx="4" fill="#c98f2a" ${S(2)}/>
+    <path d="M14 30 h12" stroke="${INK}" stroke-width="1.6"/>
+    <path d="M10 16 q10 -4 20 0" stroke="#f2c86a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  </svg>` },
+  books: { w: 36, foot: [-14, -8, 28, 8], svg: `<svg viewBox="0 0 36 30">
+    ${shadow(18, 28, 16, 2.5)}
+    <rect x="4" y="20" width="28" height="7" rx="1" fill="#5bb6ff" ${S(2)}/>
+    <rect x="6" y="13" width="25" height="7" rx="1" fill="#ff8fb6" ${S(2)}/>
+    <rect x="3" y="6" width="27" height="7" rx="1" fill="#36dcae" ${S(2)}/>
+    <path d="M26 8 v3 M28 15 v3 M28 22 v3" stroke="#fff" stroke-width="1.6"/>
+  </svg>` },
+  slippers: { w: 34, svg: `<svg viewBox="0 0 36 22">
+    <ellipse cx="11" cy="12" rx="8" ry="9" fill="#ffd1e1" ${S(2)}/><ellipse cx="25" cy="11" rx="8" ry="9" fill="#ffd1e1" ${S(2)}/>
+    <path d="M5 8 q6 -5 12 0 M19 7 q6 -5 12 0" stroke="#ff8fb6" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </svg>` },
+  posterInk: { w: 62, svg: `<svg viewBox="0 0 64 82">
+    <rect x="3" y="3" width="58" height="76" rx="2" fill="#f4ede0" ${S(2.6)}/>
+    <rect x="8" y="8" width="48" height="66" fill="#1f2a4a"/>
+    <text x="32" y="20" font-family="Georgia, serif" font-style="italic" font-size="7" textLength="42" lengthAdjust="spacingAndGlyphs" fill="#ffc23c" text-anchor="middle">THE INK SPOTS</text>
+    <circle cx="32" cy="44" r="17" fill="#141018" stroke="#3b3346" stroke-width="1"/>
+    <circle cx="32" cy="44" r="12" fill="none" stroke="#2c2634" stroke-width="1"/><circle cx="32" cy="44" r="8" fill="none" stroke="#2c2634" stroke-width="1"/>
+    <circle cx="32" cy="44" r="5" fill="#c94f6d"/><circle cx="32" cy="44" r="1.2" fill="#f4ede0"/>
+    <text x="32" y="70" font-family="Georgia, serif" font-size="6" fill="#f4ede0" text-anchor="middle">1939</text>
+  </svg>` },
+  wallshelf: { w: 70, svg: `<svg viewBox="0 0 72 46">
+    <rect x="2" y="34" width="68" height="6" rx="1" fill="#8a5a44" ${S(2.2)}/>
+    <path d="M10 40 l4 6 M60 40 l-4 6" stroke="${INK}" stroke-width="2.4"/>
+    <rect x="6" y="14" width="6" height="20" fill="#ff8fb6" ${S(1.6)}/><rect x="12" y="10" width="6" height="24" fill="#5bb6ff" ${S(1.6)}/><rect x="18" y="16" width="6" height="18" fill="#ffc23c" ${S(1.6)}/>
+    <path d="M28 18 l10 -6" stroke="${INK}" stroke-width="2"/><rect x="30" y="14" width="6" height="20" fill="#36dcae" ${S(1.6)} transform="rotate(20 33 24)"/>
+    <path d="M50 34 L48 24 L60 24 L58 34 Z" fill="#c97b5a" ${S(1.8)}/><path d="M54 24 q-8 -8 -4 -16 q6 6 4 16 q4 -10 10 -12 q0 10 -10 12" fill="#6dbb6a" ${S(1.6)}/>
   </svg>` }
 };
