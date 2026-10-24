@@ -14,6 +14,7 @@ const MAT = '#b5743f';
 export interface Spot {
   x: number; y: number; r: number;
   label: string;
+  name?: string;   // what PoiPoi gets distracted by here
   door?: boolean;
   when?: (w: World) => boolean;
   run: (w: World) => Promise<void>;
@@ -65,8 +66,8 @@ function door(x: number, y: number, to: MapName, spawn: string, label: string, c
     }
   };
 }
-const look = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], label = 'Look'): Spot =>
-  ({ x, y, r, label, run: async w => { await w.say(lines); } });
+const look = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], name?: string): Spot =>
+  ({ x, y, r, label: 'Look', name, run: async w => { await w.say(lines); } });
 
 /* ---------- gym: looking at anything turns up the café keys ---------- */
 async function foundKeys(w: World) {
@@ -79,8 +80,8 @@ async function foundKeys(w: World) {
   ui.objective(objectiveText());
   ui.toast('You can open the café now.<small>It is across the road, on the south side.</small>', 4600);
 }
-const gymLook = (x: number, y: number, r: number, lines: Parameters<World['say']>[0]): Spot => ({
-  x, y, r, label: 'Look',
+const gymLook = (x: number, y: number, r: number, lines: Parameters<World['say']>[0], name: string): Spot => ({
+  x, y, r, label: 'Look', name,
   run: async w => { await w.say(lines); if (!f('gymSearched')) await foundKeys(w); }
 });
 
@@ -234,14 +235,14 @@ export const MAPS: Record<MapName, MapDef> = {
     lights: [[270, 150, '#fff1c9', 110], [130, 80, '#9fd8ff', 70]],
     spawns: { wake: [300, 380], door: [240, 404] },
     spots: [
-      look(64, 198, 58, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.']),
-      { x: 330, y: 198, r: 60, label: 'Play', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
-      { x: 222, y: 190, r: 38, label: 'Strum', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
-      look(390, 330, 90, ['Mohit could go back to sleep...', '...but the silence is too loud.']),
-      look(270, 160, 40, ['The street outside is completely empty.']),
-      look(372, 156, 34, ['A poster of The Ink Spots. 1939.', "Mohit's favourite song is still stuck in his head."]),
-      look(46, 410, 50, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."]),
-      look(46, 318, 44, ['The beanbag still has a Mohit-shaped dent in it.']),
+      look(64, 198, 58, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.'], "Mohit's laptop"),
+      { x: 330, y: 198, r: 60, label: 'Play', name: 'the piano keys', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
+      { x: 222, y: 190, r: 38, label: 'Strum', name: 'the guitar strings', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
+      look(390, 330, 90, ['Mohit could go back to sleep...', '...but the silence is too loud.'], "the bed"),
+      look(270, 160, 40, ['The street outside is completely empty.'], "a pigeon outside the window"),
+      look(372, 156, 34, ['A poster of The Ink Spots. 1939.', "Mohit's favourite song is still stuck in his head."], "the poster"),
+      look(46, 410, 50, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."], "the laundry pile"),
+      look(46, 318, 44, ['The beanbag still has a Mohit-shaped dent in it.'], "the beanbag"),
       door(240, 424, 'city', 'apt', 'Go out')
     ],
     async enter(w) {
@@ -305,16 +306,16 @@ export const MAPS: Record<MapName, MapDef> = {
         state.set('sawNote');
         return false;
       }),
-      { x: 1420, y: 576, r: 80, label: 'Look', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
-      look(120, 576, 80, ['Also closed.']),
-      look(768, 110, 60, ['This one too. Suspicious.']),
-      look(768, 1090, 60, ['Closed. Every road out of town is closed.']),
-      look(1250, 540, 54, ["Bus stop. The board says the next bus is 'Delayed'.", 'It always says that.']),
-      look(470, 640, 50, ['An auto, parked with the meter still down.', 'No driver. No "Bhaiya, chaloge?" Nothing.']),
-      look(920, 790, 56, ['The chai tapri. The kettle is still warm.', 'Ten rupees a cup, and nobody to sell it.']),
-      look(600, 780, 44, ['The milk booth. The crates are full.']),
-      look(1310, 778, 40, ['Gully cricket stumps. Someone was batting.', 'They left mid-over.']),
-      look(1384, 500, 60, ["Every shutter is down. Even Sharma ji's, and he never closes."])
+      { x: 1420, y: 576, r: 80, label: 'Look', name: 'the barricade', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
+      look(120, 576, 80, ['Also closed.'], "the barricade"),
+      look(768, 110, 60, ['This one too. Suspicious.'], "the barricade"),
+      look(768, 1090, 60, ['Closed. Every road out of town is closed.'], "the barricade"),
+      look(1250, 540, 54, ["Bus stop. The board says the next bus is 'Delayed'.", 'It always says that.'], "the bus stop bench"),
+      look(470, 640, 50, ['An auto, parked with the meter still down.', 'No driver. No "Bhaiya, chaloge?" Nothing.'], "the auto's back seat"),
+      look(920, 790, 56, ['The chai tapri. The kettle is still warm.', 'Ten rupees a cup, and nobody to sell it.'], "the chai tapri"),
+      look(600, 780, 44, ['The milk booth. The crates are full.'], "the milk crates"),
+      look(1310, 778, 40, ['Gully cricket stumps. Someone was batting.', 'They left mid-over.'], "the cricket stumps"),
+      look(1384, 500, 60, ["Every shutter is down. Even Sharma ji's, and he never closes."], "Sharma ji's shutter")
     ],
     target: () => !f('cityIntro') ? null
       : !f('gymSearched') ? [1056, 400]
@@ -356,11 +357,11 @@ export const MAPS: Record<MapName, MapDef> = {
     lights: [[264, 60, '#dbeeff', 160]],
     spawns: { door: [264, 350] },
     spots: [
-      gymLook(190, 172, 80, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.']),
-      gymLook(420, 162, 56, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.']),
-      gymLook(40, 146, 44, ['The gym playlist is still going.', 'Honestly, kind of a banger.']),
-      gymLook(504, 160, 40, ['Free water. At least something still works.']),
-      gymLook(420, 324, 60, ["Nobody's spotting anybody today."]),
+      gymLook(190, 172, 80, ['A treadmill. Mohit stares at it.', 'It stares back. Neither of them moves.'], "the treadmill belt"),
+      gymLook(420, 162, 56, ['Mohit lifts a dumbbell.', 'Then puts it back. Respectfully.'], "the dumbbells"),
+      gymLook(40, 146, 44, ['The gym playlist is still going.', 'Honestly, kind of a banger.'], "the speaker"),
+      gymLook(504, 160, 40, ['Free water. At least something still works.'], "the water cooler"),
+      gymLook(420, 324, 60, ["Nobody's spotting anybody today."], "the bench"),
       door(264, 372, 'city', 'gym', 'Go out')
     ],
     async enter(w) {
@@ -390,9 +391,9 @@ export const MAPS: Record<MapName, MapDef> = {
     lights: [[264, 40, '#ffd27a', 150], [130, 120, '#ffcf7a', 80]],
     spawns: { door: [264, 398], kitchen: [460, 140] },
     spots: [
-      look(130, 212, 78, ['Fresh buns under the glass. Nobody is watching them.', 'Mohit is not that kind of person either.']),
-      look(300, 292, 56, ['A half-finished cup of chai.', "It's still a little warm..."]),
-      look(440, 354, 56, ['Someone left a crossword half done. 7 down: "LONELY".', 'Mohit puts the pen down.']),
+      look(130, 212, 78, ['Fresh buns under the glass. Nobody is watching them.', 'Mohit is not that kind of person either.'], "the buns behind the glass"),
+      look(300, 292, 56, ['A half-finished cup of chai.', "It's still a little warm..."], "the cup of chai"),
+      look(440, 354, 56, ['Someone left a crossword half done. 7 down: "LONELY".', 'Mohit puts the pen down.'], "the crossword"),
       door(460, 120, 'kitchen', 'door', 'Open', async w => {
         if (f('cafe')) return true;
         await w.say(['STAFF ONLY.', 'Mohit is not staff.']);
@@ -427,8 +428,8 @@ export const MAPS: Record<MapName, MapDef> = {
     lights: [[240, 40, '#fff1c9', 120]],
     spawns: { door: [240, 360] },
     spots: [
-      { x: 48, y: 146, r: 44, label: 'Look', run: w => w.say(f('fed') ? 'The fridge. Mohit closes it before PoiPoi gets ideas.' : 'The fridge is open a crack. Something has been in here.') },
-      look(420, 150, 54, ['Shelves of atta and dal. One sack is missing.']),
+      { x: 48, y: 146, r: 44, label: 'Look', name: 'the fridge', run: w => w.say(f('fed') ? 'The fridge. Mohit closes it before PoiPoi gets ideas.' : 'The fridge is open a crack. Something has been in here.') },
+      look(420, 150, 54, ['Shelves of atta and dal. One sack is missing.'], "the atta sacks"),
       door(240, 380, 'cafe', 'kitchen', 'Go out', async w => {
         if (!f('metPoi') || f('fed')) return true;
         await w.say(M("I can't just leave him hungry."));

@@ -14,6 +14,8 @@ const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
 // walking speed, rising to a jog after ~0.7s of continuous movement
 const WALK = 165, JOG = 240;
 const HAZE = 0xf2dcc6;
+// chance that PoiPoi stays behind at something Mohit just interacted with
+const POI_DISTRACT_CHANCE = 0.35;
 
 type Sprite = Phaser.GameObjects.Sprite;
 type Light = { img: Phaser.GameObjects.Image; kind: 'night' | 'indoor'; base: number };
@@ -22,6 +24,8 @@ type Light = { img: Phaser.GameObjects.Image; kind: 'night' | 'indoor'; base: nu
 class Follower {
   sprite: Sprite;
   distracted = false;
+  // he only rejoins once Mohit has walked away from him and come back
+  private armed = false;
   private nextDistract: number;
   private hint?: Phaser.GameObjects.Image;
 
@@ -36,7 +40,9 @@ class Follower {
     s.setDepth(s.y);
     if (this.distracted) {
       this.hint?.setPosition(s.x, s.y - 54 + Math.sin(this.w.time.now / 160) * 3);
-      if (Phaser.Math.Distance.Between(p.x, p.y, s.x, s.y) < 50) this.rejoin();
+      const d = Phaser.Math.Distance.Between(p.x, p.y, s.x, s.y);
+      if (d > 130) this.armed = true;
+      if (this.armed && d < 56) this.rejoin();
       return;
     }
     if (this.w.followPaused) return;
@@ -57,7 +63,7 @@ class Follower {
   }
 
   wander() {
-    this.distracted = true;
+    this.distracted = true; this.armed = true;
     this.sprite.play('p-loaf');
     this.hint = this.w.add.image(this.sprite.x, this.sprite.y - 54, 'pix-spark').setScale(ART).setDepth(26000);
     const what = Phaser.Utils.Array.GetRandom(['a speck of dust', 'a leaf', 'nothing. there is nothing there.', 'his own tail', 'a very interesting crack in the road']);
@@ -65,8 +71,23 @@ class Follower {
     sfx.meow(true);
   }
 
+  /** Stays behind at something Mohit just looked at. */
+  distractBy(x: number, y: number, name: string) {
+    this.distracted = true; this.armed = false;
+    const s = this.sprite, tx = x + Phaser.Math.Between(-22, 22), ty = y + 10;
+    s.setFlipX(tx < s.x).play('p-walk');
+    this.w.tweens.add({
+      targets: s, x: tx, y: ty, duration: Math.max(200, Phaser.Math.Distance.Between(s.x, s.y, tx, ty) * 5),
+      onComplete: () => { if (this.distracted) s.play('p-loaf'); }
+    });
+    this.hint = this.w.add.image(tx, ty - 54, 'pix-spark').setScale(ART).setDepth(26000);
+    ui.toast(`PoiPoi got distracted by ${name}.<small>Go off and come back for him.</small>`, 3400);
+    sfx.meow(true);
+  }
+
   rejoin() {
-    this.distracted = false;
+    this.distracted = false; this.armed = false;
+    this.w.tweens.killTweensOf(this.sprite);
     this.hint?.destroy(); this.hint = undefined;
     this.nextDistract = this.w.time.now + Phaser.Math.Between(16000, 26000);
     this.w.trail = [{ x: this.sprite.x, y: this.sprite.y }, { x: this.w.player.x, y: this.w.player.y }];
@@ -291,7 +312,13 @@ export class World extends Phaser.Scene {
     input.setAction(near ? near.label : null);
     if (near) {
       this.marker.setVisible(true).setPosition(p.x, p.y - 112);
-      if (input.consumeA()) this.cutscene(() => near.run(this));
+      if (input.consumeA()) this.cutscene(async () => {
+        await near.run(this);
+        const poi = this.poi;
+        if (!near.door && poi && !poi.distracted && !this.followPaused && !this.leaving && state.flag('fed') && Math.random() < POI_DISTRACT_CHANCE) {
+          poi.distractBy(near.x, near.y, near.name ?? 'something');
+        }
+      });
     } else {
       this.marker.setVisible(false);
       input.consumeA();
