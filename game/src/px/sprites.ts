@@ -12,20 +12,20 @@ const MOHIT_PAL: Record<string, string> = {
 
 const HEAD_FRONT = [
   '................',
-  '.....k.k..k.....',
-  '....khkhkkhk....',
-  '...khhhhhhhhk...',
-  '..khhHhhhhHhhk..',
-  '..khHhhhhhhhhhk.',
+  '.....k.kk.k.....',
+  '...kkhkhhkhkk...',
+  '..khhhhhhhhhhk..',
+  '.khhHHhhhhHhhhk.',
+  '.khHhhhhhhhhhhk.',
   '.khhhhhhhhhhhhk.',
   '.khhhhhhhhhhhhk.',
-  '.khhshhhshhhshk.',
-  '.khhsshsshsshhk.',
-  '.khggggssgggghk.',
-  '.khgskggggksghk.',
-  '.khggggssgggghk.',
-  '.khsbssssssbshk.',
-  '.khssssmmsssshk.',
+  '.khhhshhhhshhhk.',
+  '.khsshsshsshshk.',
+  '.khsggsssggsshk.',
+  '.khgksgggskgshk.',
+  '.khgksgsgskgshk.',
+  '.khbggsssggbshk.',
+  '.khssssmssssshk.',
   '...kSssssssSk...'
 ];
 const BODY_FRONT = [
@@ -79,21 +79,21 @@ const BODY_BACK = [
 ];
 const SIDE = [
   '................',
-  '......k.k.......',
-  '.....khkhkk.....',
-  '....khhhhhhhk...',
+  '................',
+  '................',
+  '......kk.kk.....',
+  '....kkhhkhhkk...',
   '...khhHhhhhhhk..',
   '..khhhhhhhhhhhk.',
   '..khhhhhhhhhhhk.',
   '..khhhhhhhhhhhk.',
-  '..khhhhhhhshhsk.',
-  '..khhhhhsshsssk.',
-  '..khhhhssggggk..',
-  '..khhhSssgksgsk.',
-  '..khhhhssggggk..',
-  '..khhhhsssssbsk.',
-  '..khhhhssssssmk.',
-  '...khhkSsssssk..',
+  '..khhhhhhhhhhhk.',
+  '..khhhhhgggshhk.',
+  '..khhhSggkgsssk.',
+  '..khhhSsgkgssSk.',
+  '..khhhhssbssssk.',
+  '..khhhhsssssmsk.',
+  '...khhkSssssSk..',
   '.....kSSSSk.....',
   '....kttttttk....',
   '...kttttttttk...',
@@ -114,10 +114,11 @@ type Face = { blink?: boolean; mouth?: 'o' | 'open' | 'flat'; sweat?: boolean; w
 function faceFront(head: string[], f: Face): string[] {
   const h = head.map(r => r);
   const set = (row: number, col: number, ch: string) => { h[row] = h[row].slice(0, col) + ch + h[row].slice(col + 1); };
-  if (f.blink) { set(11, 4, 's'); set(11, 5, 'k'); set(11, 10, 'k'); set(11, 11, 's'); }
+  if (f.blink) { set(11, 4, 's'); set(11, 10, 's'); }
   if (f.mouth === 'o' || f.mouth === 'open') { set(14, 7, 'k'); set(14, 8, 'k'); set(15, 7, 'm'); set(15, 8, 'm'); }
+  if (f.mouth === 'o' || f.mouth === 'open' || f.mouth === 'flat') set(14, 7, 'k');
   if (f.mouth === 'flat') { set(14, 7, 'k'); set(14, 8, 'k'); }
-  if (f.worried) { set(9, 5, 'k'); set(9, 10, 'k'); }
+  if (f.worried) { set(9, 4, 'k'); set(9, 10, 'k'); }
   return h;
 }
 
@@ -127,7 +128,7 @@ function mohitFrame(view: 'front' | 'back' | 'side', o: Face & { lift?: [number,
   const ox = 4, bob = o.bob ?? 0;
   if (view === 'side') {
     px.grid(SIDE_LEGS[o.legs ?? 'idle'], MOHIT_PAL, ox, 24);
-    const top = o.blink ? SIDE.map((r, j) => j === 11 ? r.slice(0, 10) + 's' + r.slice(11) : r) : SIDE;
+    const top = o.blink ? SIDE.map((r, j) => j === 11 ? r.slice(0, 9) + 's' + r.slice(10) : r) : SIDE;
     px.grid(top, MOHIT_PAL, ox, bob);
   } else {
     const head = view === 'front' ? faceFront(HEAD_FRONT, o) : HEAD_BACK;
@@ -177,70 +178,70 @@ export const POI_LOOK: CatLook = { fur: C.catW, point: C.catG, eye: '#8fd0ff', c
 export const MAO_LOOK: CatLook = { fur: [C.maoG[0], C.maoG[1], C.maoG[2]], point: [C.maoG[1], C.maoG[2], C.maoG[3]], eye: '#ffad33', stripes: C.maoG[3] };
 
 const CAT_HEAD = [
-  '..........k...k..',
-  '.........kgk.kgk.',
-  '........kgnkkngk.',
-  '.......kWWWWWWWWk',
-  '......kWWWWWWWWWk',
-  '......kWEkWWEkWWk',
-  '......kWEkWWEkWWk',
-  '......kbWGnGWbWWk',
-  '.......kwWGGWwwk.'
+  '..................',
+  '..........k...k...',
+  '.........kgk.kgk..',
+  '.........kgnkngk..',
+  '........kWWWWWWWk.',
+  '.kk....kWWWWWWWWWk',
+  'kGGk...kWWEWWWEWWk',
+  'kGk....kWWEWWWEWWk',
+  '.kGk...kWbWWnWWbWk',
+  '..kGk...kWWkWkWWk.'
 ];
 const CAT_BODY: Record<string, string[]> = {
   stand: [
-    '.kk....kkrryrk...',
-    'kGGk..kWWWWWWWk..',
-    'kGk.kWWWWWWWWWWk.',
-    '.kGkWWWWWWWWWWWk.',
-    '..kwwwWWWWWWwwk..',
-    '..kWk.kWk.kWkTk..',
-    '..kk..kk..kkkk...'
+    '...kGkkkkkWWWWWk..',
+    '....kWWWWWWrrykk..',
+    '...kWWWWWWWWWWWk..',
+    '...kwwwWWWWWWwwk..',
+    '...kWkkWk..kWkTk..',
+    '...kkk.kk..kkkkk..'
   ],
   walkA: [
-    '.kk....kkrryrk...',
-    'kGGk..kWWWWWWWk..',
-    'kGk.kWWWWWWWWWWk.',
-    '.kGkWWWWWWWWWWWk.',
-    '..kwwwWWWWWWwwk..',
-    '.kWk..kWkkWk.kTk.',
-    '.kk...kk.kk...kk.'
+    '...kGkkkkkWWWWWk..',
+    '....kWWWWWWrrykk..',
+    '...kWWWWWWWWWWWk..',
+    '...kwwwWWWWWWwwk..',
+    '..kWk..kWkkWk.kTk.',
+    '..kk...kk.kk..kk..'
   ],
   walkB: [
-    '.kk....kkrryrk...',
-    'kGGk..kWWWWWWWk..',
-    'kGk.kWWWWWWWWWWk.',
-    '.kGkWWWWWWWWWWWk.',
-    '..kwwwWWWWWWwwk..',
-    '...kWkWk...kTWk..',
-    '...kkkk....kkkk..'
+    '...kGkkkkkWWWWWk..',
+    '....kWWWWWWrrykk..',
+    '...kWWWWWWWWWWWk..',
+    '...kwwwWWWWWWwwk..',
+    '....kWkWk...kWkTk.',
+    '....kkkkk...kkkk..'
   ],
   loaf: [
-    '.......kkrryrk...',
-    '.kk..kkWWWWWWWk..',
-    'kGGkkWWWWWWWWWWk.',
-    'kGGGWWWWWWWWWWWk.',
-    '.kkwwwwwwwwwwwk..',
-    '...kkkkkkkkkkk...',
-    '.................'
+    '..................',
+    '..................',
+    '...kGkkkkkWWWWWk..',
+    '..kWWWWWWWWrrykk..',
+    '..kwwwwwwwwwwwwk..',
+    '...kkkkkkkkkkkk...'
   ]
 };
 
 function catFrame(look: CatLook, body: keyof typeof CAT_BODY, f: { eyes?: 'open' | 'closed' | 'big'; head?: number; tongue?: boolean; crumbs?: boolean } = {}) {
   const px = new Px(CAT_FW, CAT_FH);
   const pal: Record<string, string> = {
-    k: INK, W: look.fur[0], w: look.fur[1], G: look.point[1], g: look.point[2], n: '#f4a9bc', b: '#f3a3b4',
-    E: look.eye, r: look.collar ? '#d6336c' : look.fur[1], y: look.collar ? '#f4c542' : look.fur[1], T: look.toes ? look.point[1] : look.fur[0]
+    k: INK, W: look.fur[0], w: look.fur[1], G: look.point[1], g: look.point[2], n: '#f4a9bc', b: '#f7b8c6',
+    E: '#2b2430', r: look.collar ? '#d6336c' : look.fur[1], y: look.collar ? '#f4c542' : look.fur[1], T: look.toes ? look.point[1] : look.fur[0]
   };
-  const loafDrop = body === 'loaf' ? 2 : 0, headDrop = (f.head ?? 0) + loafDrop;
-  px.grid(CAT_BODY[body], pal, 0, 9);
-  let head = CAT_HEAD.map(r => r);
-  if (f.eyes === 'closed') { head[5] = '......kWWWWWWWWWk'; head[6] = '......kWkkWWkkWWk'; }
-  if (f.eyes === 'big') head[4] = '......kWEEWWEEWWk';
-  px.grid(head, pal, 0, headDrop);
-  if (look.stripes) { px.p(10, 3 + headDrop, look.stripes).p(12, 3 + headDrop, look.stripes).p(7, 11, look.stripes).p(9, 10, look.stripes).p(11, 11, look.stripes); }
-  if (f.tongue) px.p(11, 9 + headDrop, '#e8607e');
-  if (f.crumbs) { px.p(9, 9 + headDrop, '#d9a35f').p(13, 10 + headDrop, '#d9a35f').p(6, 4 + headDrop, '#d9a35f'); }
+  const loaf = body === 'loaf';
+  const headY = (f.head ?? 0) + (loaf ? 2 : 0);
+  px.grid(CAT_BODY[body], pal, 0, 10);
+  const head = CAT_HEAD.map(r => r);
+  const set = (row: number, col: number, ch: string) => { head[row] = head[row].slice(0, col) + ch + head[row].slice(col + 1); };
+  if (f.eyes === 'closed') { set(6, 10, 'W'); set(6, 14, 'W'); }
+  if (f.eyes === 'big') { set(5, 10, 'E'); set(5, 14, 'E'); }
+  px.grid(head, pal, 0, headY);
+  if (f.eyes !== 'closed') { px.p(10, 6 + headY, look.eye).p(14, 6 + headY, look.eye); }
+  if (look.stripes) { px.p(12, 4 + headY, look.stripes).p(11, 5 + headY, look.stripes).p(13, 5 + headY, look.stripes).p(6, 12, look.stripes).p(8, 12, look.stripes).p(10, 12, look.stripes); }
+  if (f.tongue) px.p(12, 10 + headY, '#e8607e');
+  if (f.crumbs) { px.p(10, 10 + headY, '#d9a35f').p(15, 9 + headY, '#d9a35f').p(9, 4 + headY, '#d9a35f'); }
   return px;
 }
 

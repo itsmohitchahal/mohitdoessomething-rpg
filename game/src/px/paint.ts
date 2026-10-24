@@ -2,7 +2,7 @@
 
 export const INK = '#2b2430';
 
-/** Hand-tuned colour ramps, light to dark. */
+/** Colour ramps, light to dark. */
 export const C = {
   ink: INK,
   white: '#fffaf2',
