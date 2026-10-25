@@ -122,14 +122,19 @@ function faceFront(head: string[], f: Face): string[] {
   return h;
 }
 
-/** Builds a Mohit frame (24x32). legsLift: [left, right] in px, bob: upper body offset. */
-function mohitFrame(view: 'front' | 'back' | 'side', o: Face & { lift?: [number, number]; bob?: number; legs?: 'idle' | 'a' | 'b'; arm?: 'out' | 'wave' } = {}) {
+export type View = 'front' | 'back' | 'side';
+/** Another person built on Mohit's body: palette swaps plus accessories drawn on top. */
+export interface PersonLook { pal?: Record<string, string>; extra?: (px: Px, view: View, ox: number, bob: number) => void }
+
+/** Builds a person frame (24x32). lift: [left, right] shoe lift in px, bob: upper body offset. */
+function mohitFrame(view: View, o: Face & { lift?: [number, number]; bob?: number; legs?: 'idle' | 'a' | 'b'; arm?: 'out' | 'wave' } = {}, look: PersonLook = {}) {
   const px = new Px(MOHIT_FW, MOHIT_FH);
   const ox = 4, bob = o.bob ?? 0;
+  const pal = { ...MOHIT_PAL, ...(look.pal ?? {}) };
   if (view === 'side') {
-    px.grid(SIDE_LEGS[o.legs ?? 'idle'], MOHIT_PAL, ox, 24);
+    px.grid(SIDE_LEGS[o.legs ?? 'idle'], pal, ox, 24);
     const top = o.blink ? SIDE.map((r, j) => j === 11 ? r.slice(0, 9) + 's' + r.slice(10) : r) : SIDE;
-    px.grid(top, MOHIT_PAL, ox, bob);
+    px.grid(top, pal, ox, bob);
   } else {
     const head = view === 'front' ? faceFront(HEAD_FRONT, o) : HEAD_BACK;
     const body = view === 'front' ? BODY_FRONT : BODY_BACK;
@@ -138,20 +143,30 @@ function mohitFrame(view: 'front' | 'back' | 'side', o: Face & { lift?: [number,
     // a stepping leg keeps its trouser but its shoe comes up off the ground
     ([[0, ll], [1, rl]] as const).forEach(([side, lift]) => {
       const rows = half(side);
-      px.grid(rows.slice(0, 5), MOHIT_PAL, ox, 25);
-      px.grid(rows.slice(5), MOHIT_PAL, ox, 30 - lift);
+      px.grid(rows.slice(0, 5), pal, ox, 25);
+      px.grid(rows.slice(5), pal, ox, 30 - lift);
     });
-    px.grid(body, MOHIT_PAL, ox, 16 + bob);
-    px.grid(head, MOHIT_PAL, ox, bob);
+    px.grid(body, pal, ox, 16 + bob);
+    px.grid(head, pal, ox, bob);
     if (o.arm === 'out') {
-      px.r(ox + 13, 19 + bob, 1, 4, MOHIT_PAL.t);
-      px.r(ox + 14, 18 + bob, 6, 3, MOHIT_PAL.t).box(ox + 14, 17 + bob, 7, 5, INK).r(ox + 14, 18 + bob, 6, 3, MOHIT_PAL.t);
-      px.r(ox + 20, 18 + bob, 2, 3, MOHIT_PAL.s).box(ox + 20, 17 + bob, 3, 5, INK).r(ox + 20, 18 + bob, 2, 3, MOHIT_PAL.s);
-      px.r(ox + 13, 23 + bob, 2, 1, MOHIT_PAL.t);
+      px.r(ox + 13, 19 + bob, 1, 4, pal.t);
+      px.r(ox + 14, 18 + bob, 6, 3, pal.t).box(ox + 14, 17 + bob, 7, 5, INK).r(ox + 14, 18 + bob, 6, 3, pal.t);
+      px.r(ox + 20, 18 + bob, 2, 3, pal.s).box(ox + 20, 17 + bob, 3, 5, INK).r(ox + 20, 18 + bob, 2, 3, pal.s);
+      px.r(ox + 13, 23 + bob, 2, 1, pal.t);
     }
     if (o.sweat) { px.p(ox + 14, 4, '#9fd8ff').p(ox + 14, 5, '#9fd8ff').p(ox + 15, 5, INK); }
   }
+  look.extra?.(px, view, ox, bob);
   return px;
+}
+
+/** Walk cycles in all four directions for an NPC. */
+export function personFrames(look: PersonLook): Record<string, () => Px> {
+  return {
+    idle: () => mohitFrame('front', {}, look), walkA: () => mohitFrame('front', { lift: [2, 0], bob: -1 }, look), walkB: () => mohitFrame('front', { lift: [0, 2], bob: -1 }, look),
+    bIdle: () => mohitFrame('back', {}, look), bWalkA: () => mohitFrame('back', { lift: [2, 0], bob: -1 }, look), bWalkB: () => mohitFrame('back', { lift: [0, 2], bob: -1 }, look),
+    sIdle: () => mohitFrame('side', {}, look), sWalkA: () => mohitFrame('side', { legs: 'a', bob: -1 }, look), sWalkB: () => mohitFrame('side', { legs: 'b', bob: -1 }, look)
+  };
 }
 
 export const MOHIT_FRAMES: Record<string, () => Px> = {

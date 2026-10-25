@@ -3,6 +3,7 @@ import './game.css';
 import { Boot } from './scenes/Boot';
 import { World } from './scenes/World';
 import { Battle } from './scenes/Battle';
+import { Fight } from './scenes/Fight';
 import { initTitle } from './title.js';
 import { state, type MapName } from './state';
 import { ui } from './ui';
@@ -25,7 +26,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.NONE, zoom: 1 / DPR },
   pixelArt: true,
   render: { roundPixels: true },
-  scene: [Boot, World, Battle]
+  scene: [Boot, World, Battle, Fight]
 });
 
 const booted = new Promise<void>(res => game.events.once('booted', res));
@@ -63,12 +64,14 @@ async function play(map: MapName, spawn: string) {
   $('#hud').hidden = false;
   game.scale.resize(Math.round(innerWidth * DPR), Math.round(innerHeight * DPR));
   game.scene.stop('Battle');
+  game.scene.stop('Fight');
   game.scene.start('World', { map, spawn });
 }
 
 game.events.on('to-title', () => {
   game.scene.stop('World');
   game.scene.stop('Battle');
+  game.scene.stop('Fight');
   $('#game').hidden = true;
   $('#hud').hidden = true;
   ui.objective(null);
