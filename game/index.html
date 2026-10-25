@@ -79,7 +79,7 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
 .tagline{margin:18px 0 0;max-width:30ch;text-align:center;font-weight:600;font-size:15px;line-height:1.45;color:var(--text-soft);text-wrap:balance}
 .tagline a{color:var(--mustard);font-weight:700;text-decoration:none}
 
-.menu{margin-top:clamp(14px,3vh,26px);width:min(100%,340px);display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
+.menu{margin-top:clamp(14px,3vh,26px);width:min(100%,340px);display:grid;grid-template-columns:repeat(2,1fr);gap:14px 12px}
 .btn{position:relative;font:400 17px/1 var(--f-display);letter-spacing:.03em;color:var(--ink);background:var(--paper);
   border:3px solid var(--ink);border-radius:5px;padding:12px 6px 11px;cursor:pointer;transform:skewX(-8deg);
   box-shadow:5px 5px 0 var(--ink);transition:transform .06s,box-shadow .06s;touch-action:manipulation}
@@ -334,6 +334,7 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
         <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="6" ry="5" fill="currentColor"/><circle cx="5.5" cy="9.5" r="2.4" fill="currentColor"/><circle cx="9.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="14.5" cy="5.5" r="2.4" fill="currentColor"/><circle cx="18.5" cy="9.5" r="2.4" fill="currentColor"/></svg>
         START</span></button>
       <button class="btn" id="bContinue" type="button"><span>Continue</span></button>
+      <button class="btn" id="bLoad" type="button"><span>Load game</span></button>
       <button class="btn" id="bParty" type="button"><span>Party</span></button>
       <button class="btn" id="bSettings" type="button"><span>Settings</span></button>
     </nav>
@@ -348,6 +349,8 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
 <div id="game" hidden></div>
 <div id="hud" hidden>
   <div id="objective" hidden></div>
+  <div id="stats" hidden></div>
+  <button id="pausebtn" type="button" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" fill="currentColor"/></svg></button>
   <div id="joyzone"><div id="joybase"><div id="joyknob"></div></div></div>
   <button id="btnA" type="button" hidden></button>
   <div id="toast" hidden></div>
@@ -358,6 +361,8 @@ body{background:var(--wall-1);color:var(--text);font-family:var(--f-body);overfl
 <div id="gdialog" role="dialog" aria-live="polite" hidden></div>
 <div id="choices" hidden></div>
 <div id="banner" hidden></div>
+<div id="statpop" hidden></div>
+<div id="pause" role="dialog" aria-modal="true" aria-label="Paused" hidden></div>
 <div id="overlay" hidden></div>
 <button id="mute" type="button" aria-label="Sound"></button>
 <script type="module" src="./src/main.ts"></script>

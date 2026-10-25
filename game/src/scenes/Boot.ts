@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Px, rng } from '../px/paint';
-import { MOHIT_FRAMES, MOHIT_FW, MOHIT_FH, catFrames, POI_LOOK, CAT_FW, CAT_FH, bagFrame } from '../px/sprites';
+import { MOHIT_FRAMES, MOHIT_FW, MOHIT_FH, catFrames, POI_LOOK, STRAY_LOOKS, CAT_FW, CAT_FH, bagFrame } from '../px/sprites';
 import { PIX, cartFrame } from '../px/props';
 import { MONSTERS, MON_W, MON_H } from '../px/monsters';
 import { NPCS, npcFrames } from '../px/people';
@@ -43,6 +43,7 @@ export class Boot extends Phaser.Scene {
   create() {
     sheet(this, 'mohit', MOHIT_FRAMES, MOHIT_FW, MOHIT_FH);
     sheet(this, 'poi', catFrames(POI_LOOK), CAT_FW, CAT_FH);
+    STRAY_LOOKS.forEach((l, i) => sheet(this, 'stray' + i, catFrames(l), CAT_FW, CAT_FH));
     sheet(this, 'bag', { idle: () => bagFrame(), squash: () => bagFrame({ squash: true }), eyes: () => bagFrame({ eyes: true }), eyesEar: () => bagFrame({ eyes: true, ear: true }) }, 26, 30);
     sheet(this, 'cart', { c0: () => cartFrame(0), c1: () => cartFrame(1), c2: () => cartFrame(2), c3: () => cartFrame(3) }, 24, 20);
     for (const m of MONSTERS) {
@@ -82,6 +83,7 @@ export class Boot extends Phaser.Scene {
     this.anims.create({ key: 'p-walk', repeat: -1, frameRate: 9, frames: ['walk0', 'walk1', 'walk2', 'walk1'].map(f => fr('poi', f)) });
     this.anims.create({ key: 'p-loaf', repeat: -1, frames: [fr('poi', 'loaf', 2400), fr('poi', 'loafBlink', 140)] });
     this.anims.create({ key: 'p-eat', repeat: -1, frameRate: 5, frames: [fr('poi', 'eat'), fr('poi', 'eat2')] });
+    STRAY_LOOKS.forEach((_, i) => this.anims.create({ key: `stray${i}-walk`, repeat: -1, frameRate: 12, frames: ['walk0', 'walk1', 'walk2', 'walk1'].map(f => fr('stray' + i, f)) }));
     for (const m of MONSTERS) this.anims.create({ key: 'mon-' + m.id, repeat: -1, frameRate: 3, frames: ['a', 'b'].map(f => fr('mon-' + m.id, f)) });
     for (const n of NPCS) {
       const k = 'npc-' + n.id;

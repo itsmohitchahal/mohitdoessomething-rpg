@@ -7,6 +7,13 @@ const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySele
 
 export const hi = (word: string, en: string) => `<button type="button" class="hi" data-en="${en}">${word}</button>`;
 
+/** Solitude: one small figure on a hill, under the moon. */
+export const SOLITUDE_ICON = `<svg class="ico" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+  <path fill="#ffe9a8" d="M10 1h3v1h-3zM9 2h2v1H9zM9 3h1v1H9zM9 4h2v1H9zM10 5h3v1h-3z"/>
+  <path fill="#5d7a8c" d="M5 11h6v1H5zM3 12h10v1H3zM0 13h16v3H0z"/>
+  <path fill="#f4ead6" d="M7 6h2v2H7zM6 8h4v3H6z"/>
+</svg>`;
+
 class UI {
   private dlg = $('#gdialog');
   private choicesEl = $('#choices');
@@ -73,12 +80,13 @@ class UI {
   }
 
   /** Shows a vertical list of choices above the dialog box. */
-  choose<T extends string>(options: { label: string; value: T }[], cls = ''): Promise<T> {
+  choose<T extends string>(options: { label: string; value: T }[], cls = '', head = ''): Promise<T> {
     this.modal++;
     return new Promise<T>(resolve => {
       const el = this.choicesEl;
       el.className = cls;
-      el.innerHTML = options.map((o, i) => `<button type="button" data-i="${i}"><span>${o.label}</span></button>`).join('');
+      el.innerHTML = (head ? `<p class="ch-head">${head}</p>` : '') +
+        options.map((o, i) => `<button type="button" data-i="${i}"><span>${o.label}</span></button>`).join('');
       el.hidden = false;
       const btns = [...el.querySelectorAll('button')] as HTMLButtonElement[];
       let sel = 0;
@@ -123,6 +131,41 @@ class UI {
     const el = $('#banner');
     el.className = cls; el.innerHTML = `<span>${text}</span>`; el.hidden = false;
     return new Promise<void>(r => setTimeout(() => { el.hidden = true; r(); }, ms));
+  }
+
+  /** The stats shown under the goal. Hidden until there is something to show. */
+  stats(solitude: number | null) {
+    const el = $('#stats');
+    if (solitude === null) { el.hidden = true; return; }
+    el.innerHTML = `<span title="Solitude">${SOLITUDE_ICON}<b>${solitude}</b></span>`;
+    el.hidden = false;
+  }
+
+  /** A stat goes up: a card in the middle of the screen, then the number in the corner ticks up. */
+  statUp(text: string, delta: number, total: number) {
+    const el = $('#statpop');
+    this.modal++;
+    el.innerHTML = `<div class="sp-card"><p>${text}</p><div class="sp-num">${SOLITUDE_ICON}<b>+${delta}</b></div><small>SOLITUDE</small></div>`;
+    el.hidden = false;
+    sfx.sparkle();
+    return new Promise<void>(resolve => {
+      const t0 = performance.now();
+      const done = () => {
+        if (performance.now() - t0 < 700) return;
+        el.removeEventListener('pointerdown', done);
+        document.removeEventListener('keydown', onKey, true);
+        el.hidden = true; el.innerHTML = '';
+        this.modal--;
+        sfx.select();
+        this.stats(total);
+        const s = $('#stats');
+        s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop');
+        resolve();
+      };
+      const onKey = (e: KeyboardEvent) => { if (['Enter', ' ', 'e', 'E', 'z', 'Z'].includes(e.key) && !e.repeat) { e.preventDefault(); e.stopPropagation(); done(); } };
+      el.addEventListener('pointerdown', done);
+      document.addEventListener('keydown', onKey, true);
+    });
   }
 
   /** Full-screen card (game over, end of chapter) with buttons. */

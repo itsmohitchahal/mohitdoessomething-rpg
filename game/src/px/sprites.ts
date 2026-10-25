@@ -127,7 +127,7 @@ export type View = 'front' | 'back' | 'side';
 export interface PersonLook { pal?: Record<string, string>; extra?: (px: Px, view: View, ox: number, bob: number) => void }
 
 /** Builds a person frame (24x32). lift: [left, right] shoe lift in px, bob: upper body offset. */
-function mohitFrame(view: View, o: Face & { lift?: [number, number]; bob?: number; legs?: 'idle' | 'a' | 'b'; arm?: 'out' | 'wave' } = {}, look: PersonLook = {}) {
+function mohitFrame(view: View, o: Face & { lift?: [number, number]; bob?: number; legs?: 'idle' | 'a' | 'b'; arm?: 'out' | 'wave'; sit?: boolean } = {}, look: PersonLook = {}) {
   const px = new Px(MOHIT_FW, MOHIT_FH);
   const ox = 4, bob = o.bob ?? 0;
   const pal = { ...MOHIT_PAL, ...(look.pal ?? {}) };
@@ -140,8 +140,10 @@ function mohitFrame(view: View, o: Face & { lift?: [number, number]; bob?: numbe
     const body = view === 'front' ? BODY_FRONT : BODY_BACK;
     const [ll, rl] = o.lift ?? [0, 0];
     const half = (side: 0 | 1) => LEGS_FRONT.map(r => side === 0 ? r.slice(0, 8) + '........' : '........' + r.slice(8));
+    // sitting, the thighs point at the viewer, so only the shins and shoes show below the shirt
+    if (o.sit) px.grid(LEGS_FRONT.slice(3), pal, ox, 27);
     // a stepping leg keeps its trouser but its shoe comes up off the ground
-    ([[0, ll], [1, rl]] as const).forEach(([side, lift]) => {
+    else ([[0, ll], [1, rl]] as const).forEach(([side, lift]) => {
       const rows = half(side);
       px.grid(rows.slice(0, 5), pal, ox, 25);
       px.grid(rows.slice(5), pal, ox, 30 - lift);
@@ -178,6 +180,9 @@ export const MOHIT_FRAMES: Record<string, () => Px> = {
   o: () => mohitFrame('front', { mouth: 'o', worried: true }),
   hand: () => mohitFrame('front', { mouth: 'flat', arm: 'out' }),
   hurt: () => mohitFrame('front', { blink: true, mouth: 'o', sweat: true, worried: true }),
+  sit: () => mohitFrame('front', { sit: true, bob: 2 }),
+  sitHappy: () => mohitFrame('front', { sit: true, bob: 2, blink: true, mouth: 'open' }),
+  sitO: () => mohitFrame('front', { sit: true, bob: 2, mouth: 'o', worried: true }),
   bIdle: () => mohitFrame('back'),
   bWalkA: () => mohitFrame('back', { lift: [2, 0], bob: -1 }),
   bWalkB: () => mohitFrame('back', { lift: [0, 2], bob: -1 }),
@@ -191,6 +196,16 @@ export const MOHIT_FRAMES: Record<string, () => Px> = {
 export interface CatLook { fur: string[]; point: string[]; eye: string; stripes?: string; collar?: boolean; toes?: boolean }
 export const POI_LOOK: CatLook = { fur: C.catW, point: C.catG, eye: '#8fd0ff', collar: true, toes: true };
 export const MAO_LOOK: CatLook = { fur: [C.maoG[0], C.maoG[1], C.maoG[2]], point: [C.maoG[1], C.maoG[2], C.maoG[3]], eye: '#ffad33', stripes: C.maoG[3] };
+/** The neighbourhood cats that answer when PoiPoi calls the cat gods. */
+export const STRAY_LOOKS: CatLook[] = [
+  { fur: ['#f2a65a', '#d9853b'], point: ['#d9853b', '#b8692a', '#8f4f1f'], eye: '#7ed36a', stripes: '#b8692a' },
+  { fur: ['#3d3746', '#2f2936'], point: ['#2f2936', '#24202a', '#1a1520'], eye: '#ffd23c' },
+  { fur: ['#a9a6b4', '#8d8996'], point: ['#8d8996', '#6a6674', '#55525e'], eye: '#9fe07a', stripes: '#6a6674' },
+  { fur: ['#f4ead6', '#e0d2b8'], point: ['#8a6446', '#5e4430', '#4a3424'], eye: '#8fd0ff' },
+  { fur: ['#f6efe4', '#e4dccd'], point: ['#e08a3c', '#3d3746', '#e08a3c'], eye: '#ffad33', stripes: '#3d3746' },
+  { fur: ['#c99a6b', '#a87c52'], point: ['#a87c52', '#7d5a3a', '#5e4430'], eye: '#ffd23c', stripes: '#7d5a3a' },
+  { fur: ['#e8e4ee', '#cfcad8'], point: ['#3d3746', '#2f2936', '#24202a'], eye: '#7ed36a' }
+];
 
 const CAT_HEAD = [
   '..................',

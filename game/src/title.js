@@ -477,6 +477,7 @@ export function initTitle(opts) {
     if (!dlg.hidden) dlg.hidden = true; else if (sheetOpen) closeSheet();
   });
   $('#bStart').addEventListener('click', () => opts.onStart());
+  $('#bLoad').addEventListener('click', () => opts.onLoad());
   $('#bContinue').addEventListener('click', () => opts.hasSave() ? opts.onContinue() : dialog(`Continue what? You haven't even started. ${hi('Arey yaar', 'oh come on, man')}.`));
   $('#bSettings').addEventListener('click', () => {
     if (poi.onSettings) { dialog('PoiPoi is sitting on <b>Settings</b>.<br>Settings belong to PoiPoi now.'); say(poi, '...', 1500); }

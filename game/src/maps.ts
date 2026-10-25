@@ -1,12 +1,13 @@
 // Chapter 1 maps and story beats. World units: one 16px tile = 48 units (art is drawn at 3x).
 import Phaser from 'phaser';
 import type { World } from './scenes/World';
-import { state, type MapName } from './state';
+import { state, MAX_HP, type MapName } from './state';
 import { ui, hi } from './ui';
 import { sfx } from './audio';
 import { type Px, INK } from './px/paint';
 import { ART } from './px/scale';
 import { runWorkout } from './workout';
+import { crawlOut } from './roamers';
 
 type Ambient = 'wind' | 'drone' | 'gym' | 'hum' | null;
 const T = 48;
@@ -61,7 +62,9 @@ export function objectiveText(): string | null {
   if (!f('workout')) return 'Get the perfect workout at the gym';
   if (!f('mart')) return f('mFood') && f('mToys') ? 'Check out at the till' : f('cart') ? 'Get cat food and cat toys' : 'Raid the supermarket';
   if (!f('home')) return 'Take everything home';
-  return 'Hang out with PoiPoi';
+  if (!f('explore')) return 'Hang out with PoiPoi';
+  if (!f('park')) return "Let's explore this city!";
+  return 'Explore the city with PoiPoi';
 }
 
 /** A door: walks you to another map, unless PoiPoi has wandered off. */
@@ -169,11 +172,17 @@ async function feed(w: World) {
   await w.say(M('This is THE life.'));
   state.set('fed');
   w.recolor();
+  await solitudeUp('Mohit seems more accepting of this new world of solitude.', 10);
   await w.say([M('You know what this means, PoiPoi?'), M('An empty gym. Nobody watching.'), M("I can finally try the weird exercises I've been too shy to do in front of people.")]);
   w.followPaused = false;
   w.trail = [{ x: s.x, y: s.y }, { x: p.x, y: p.y }];
   ui.objective(objectiveText());
   ui.toast('PoiPoi follows you around now. Mostly.', 2600);
+}
+
+async function solitudeUp(text: string, n: number) {
+  state.addStat('solitude', n);
+  await ui.statUp(text, n, state.stat('solitude') ?? n);
 }
 
 /* ---------- gym, round two ---------- */
@@ -252,7 +261,9 @@ async function homeTime(w: World) {
     sfx.sparkle();
     await w.wait(280);
   }
-  await w.say(['A scratching post. A feather wand. A ball of yarn. A toy mouse.', 'And eleven kinds of cat food.']);
+  HOME_COKES.forEach(([x, y], i) => { w.extra['coke' + i] = w.prop('coke', x, y); });
+  sfx.sparkle();
+  await w.say(['A scratching post. A feather wand. A ball of yarn. A toy mouse.', 'Eleven kinds of cat food. And what is left of the Coke Zero crate.']);
   await w.say(M('Go on. Pick one.'));
   if (poi) {
     const s = poi.sprite;
@@ -285,8 +296,154 @@ async function homeTime(w: World) {
   sfx.sparkle();
   await w.wait(600);
   await w.say('So far, Mohit is happy.');
+  await solitudeUp('Mohit is starting to feel at home in this quiet new world.', 10);
   w.followPaused = false;
   if (poi) poi.goHome(MAPS.room.poiSpots!);
+  await exploreTime(w);
+}
+
+/* ---------- next quest: the whole town ---------- */
+async function exploreTime(w: World) {
+  await w.wait(400);
+  await w.say([M('You know what, PoiPoi?'), M('There are no people around.'), M('This whole town is ours!')]);
+  state.set('explore');
+  sfx.fanfare();
+  await ui.banner("LET'S EXPLORE THIS CITY!", 'join', 1800);
+  if (!state.bottles) {
+    await w.say(['At the bottom of the trolley: five empty Coke Zero bottles.', 'Mohit drank them on the walk home. He keeps them. You never know.']);
+    state.bottles = 5;
+    state.save();
+    ui.toast('Empty Coke Zero bottles: 5<small>Drink more Coke Zero to get more empties.</small>', 3800);
+  }
+  ui.objective(objectiveText());
+  await w.say(M("Let's start with the park. I haven't been on a swing in years."));
+}
+
+/** A cold Coke Zero: drunk on the spot, and the empty bottle goes in Mohit's pocket. */
+async function drink(w: World, lines: Parameters<World['say']>[0]) {
+  await w.say(lines);
+  for (let i = 0; i < 3; i++) { sfx.nom(); await w.wait(160); }
+  state.bottles++;
+  state.save();
+  w.emote(w.player, '+1', '#7ef0a0');
+  ui.toast(`Empty Coke Zero bottles: ${state.bottles}`, 2200);
+}
+const HOME_COKES: [number, number][] = [[140, 254], [476, 258], [262, 300]];
+function homeCoke(i: number): Spot {
+  const [x, y] = HOME_COKES[i];
+  return {
+    x, y, r: 36, label: 'Drink', name: 'the Coke Zero',
+    when: () => f('home') && !f('coke' + i),
+    run: async w => {
+      await drink(w, ['A Coke Zero from the crate. Still a little cold.', 'Mohit drinks it in one go. *tssss*']);
+      state.set('coke' + i);
+      const img = w.extra['coke' + i] as Phaser.GameObjects.Image | undefined;
+      img?.destroy();
+    }
+  };
+}
+
+/* ---------- the park swing ---------- */
+const SW = { x: 950, y: 1300 };
+const PIVOT = SW.y - 43 * ART, CHAIN = 26 * ART;
+
+function swingRest(w: World) {
+  w.extra.swingChain = w.add.image(SW.x, PIVOT, 'pix-swingchain').setOrigin(0.5, 0).setScale(ART).setDepth(SW.y + 2);
+  w.extra.swingSeat = w.add.image(SW.x, PIVOT + CHAIN, 'pix-swingseat').setOrigin(0.5, 0.2).setScale(ART).setDepth(SW.y + 3);
+}
+
+/** Mohit on the swing. The swing moves towards and away from the camera; amp is how high it goes. */
+function swingRig(w: World) {
+  const chain = w.extra.swingChain as Phaser.GameObjects.Image, seat = w.extra.swingSeat as Phaser.GameObjects.Image;
+  const rider = w.add.sprite(SW.x, PIVOT + CHAIN + 20, 'mohit', 'sit').setOrigin(0.5, 0.985).setScale(ART).setDepth(SW.y + 4);
+  const rig = { amp: 0, t: 0, last: 0 };
+  const place = (th: number) => {
+    const k = 1 + 0.12 * Math.sin(th);
+    const y = PIVOT + CHAIN * Math.cos(th) + CHAIN * 0.55 * Math.sin(th);
+    chain.setScale(ART * k, ART * ((y - PIVOT) / CHAIN));
+    seat.setPosition(SW.x, y).setScale(ART * k);
+    rider.setPosition(SW.x, y + 20 * k).setScale(ART * k);
+  };
+  const ev = w.time.addEvent({
+    delay: 16, loop: true, callback: () => {
+      rig.t += 0.016;
+      const s = Math.sin((rig.t * 2 * Math.PI) / 1.7), th = rig.amp * s;
+      place(th);
+      if (rider.frame.name !== 'sitO') rider.setFrame(s > 0.6 && rig.amp > 0.4 ? 'sitHappy' : 'sit');
+      if (Math.sign(s) !== Math.sign(rig.last) && rig.amp > 0.2) sfx.whoosh();
+      rig.last = s;
+    }
+  });
+  const to = (amp: number, ms: number) => w.tween({ targets: rig, amp, duration: ms, ease: 'Sine.easeInOut' });
+  const off = () => { ev.remove(); place(0); rider.destroy(); };
+  return { rider, to, off };
+}
+
+async function parkSwing(w: World) {
+  const p = w.player, poi = w.poi;
+  if (poi?.distracted) { await w.say(M("Wait. Where's PoiPoi? He has to see this.")); return; }
+  w.followPaused = true;
+  await w.walk(p, SW.x, SW.y + 6);
+  p.setVisible(false);
+  const rig = swingRig(w);
+  if (poi) { await w.walk(poi.sprite, SW.x - 90, SW.y + 40, 120); poi.sprite.setFlipX(false).play('p-loaf'); }
+
+  if (f('park')) {
+    await rig.to(0.8, 1500);
+    await w.say(Phaser.Utils.Array.GetRandom([[M('Wheeeee.')], ['Back and forth. Back and forth.', "PoiPoi's head follows the swing every single time."], [M('Still got it.')]]));
+    await rig.to(0, 1600);
+  } else {
+    await w.say(['Mohit sits on the swing.', 'It creaks.']);
+    rig.to(0.45, 2200);
+    await w.say(M("I haven't been on a swing since I was twelve."));
+    rig.to(0.85, 2500);
+    await w.say(['Higher.', 'Higher!']);
+    if (poi) w.emote(poi.sprite, '?', '#ffffff', 60);
+    await w.say(['PoiPoi watches the swing go back and forth. Back and forth.', 'His head follows it every single time.']);
+    await w.say(M('Wheeeeeee.'));
+    await w.wait(1800);
+    sfx.thud(); w.shake(500, 0.01);
+    w.emote({ x: SW.x + 210, y: SW.y + 40 }, '*CRUNCH*', '#ffffff', 40);
+    await rig.to(0, 1400);
+    rig.rider.setFrame('sitO');
+    await w.say(['A sound. From under the ground.', '*crrrkk... crrrrrkkk...*']);
+    await w.say(M('...What was that?'));
+    const mon = w.add.sprite(SW.x + 210, SW.y + 40, 'mon-bag', 'a').setOrigin(0.5, 0.95).setScale(ART).setDepth(SW.y + 40);
+    mon.play('mon-bag');
+    sfx.stinger();
+    await crawlOut(w, mon);
+    w.emote({ x: SW.x, y: SW.y - 60 }, '!', '#ff4f8b', 40);
+    await w.say(['Something crawls out of the ground.', 'It looks like a plastic bag. A plastic bag with a face.']);
+    rig.off();
+    p.setVisible(true).setPosition(SW.x, SW.y + 6);
+    p.setFlipX(false); w.face(1, 0); p.play(w.animFor(false));
+    await w.say([M('Oh no. Oh no no no.'), M('PoiPoi, stay behind me.')]);
+    if (poi) {
+      await w.walk(poi.sprite, SW.x + 80, SW.y + 30, 140);
+      poi.sprite.play('p-idle');
+      await w.say('PoiPoi does not stay behind him.');
+    }
+    w.tweens.add({ targets: mon, alpha: 0.7, yoyo: true, repeat: -1, duration: 400 });
+    sfx.stinger(); w.shake(420, 0.012); w.flash(220);
+    await ui.banner('CONFRONTATION!', 'danger', 1300);
+    const r = await w.battle('bag', 'park');
+    w.tweens.killTweensOf(mon);
+    w.tweens.add({ targets: mon, alpha: 0, duration: 500, onComplete: () => mon.destroy() });
+    await w.wait(500);
+    await w.say(r === 'friend'
+      ? [M('...It floated away.'), M('Did PoiPoi just make a friend? Out of THAT?')]
+      : [M('...Did I just beat up a plastic bag?'), M('In a park?')]);
+    await w.say([M('So the town is not completely empty.'), M('Okay. Not ALL ours.'), M('Mostly ours.')]);
+    state.set('park');
+    w.recolor();
+    ui.objective(objectiveText());
+    ui.toast("Mohit's HP carries over from fight to fight.<small>PoiPoi's grooming helps. So does a nap in bed at home.</small>", 5200);
+  }
+  rig.off();
+  p.setVisible(true).setPosition(SW.x, SW.y + 6);
+  p.play(w.animFor(false));
+  if (poi) { w.trail = [{ x: poi.sprite.x, y: poi.sprite.y }, { x: p.x, y: p.y }]; poi.sprite.play('p-idle'); }
+  w.followPaused = false;
 }
 
 
@@ -352,12 +509,27 @@ export const MAPS: Record<MapName, MapDef> = {
       { x: 222, y: 198, act: 'guitar' }, { x: 84, y: 156, act: 'laptop', depth: 200 }, { x: 410, y: 360, act: 'nap', depth: 440 },
       { x: 56, y: 404, act: 'nap', depth: 420 }, { x: 270, y: 164, act: 'window' }, { x: 46, y: 314, act: 'nap', depth: 320 }
     ],
-    setup(w) { if (f('home')) for (const [key, x, y, floor] of HOME_TOYS) placeToy(w, key, x, y, floor); },
+    setup(w) {
+      if (!f('home')) return;
+      for (const [key, x, y, floor] of HOME_TOYS) placeToy(w, key, x, y, floor);
+      HOME_COKES.forEach(([x, y], i) => { if (!f('coke' + i)) w.extra['coke' + i] = w.prop('coke', x, y); });
+    },
     spots: [
       look(64, 198, 58, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.'], "Mohit's laptop"),
       { x: 330, y: 198, r: 60, label: 'Play', name: 'the piano keys', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
       { x: 222, y: 190, r: 38, label: 'Strum', name: 'the guitar strings', run: async w => { sfx.strum(); await w.say('Mohit strums the guitar once. Slightly out of tune. Like always.'); } },
-      look(390, 330, 90, ['Mohit could go back to sleep...', '...but the silence is too loud.'], "the bed"),
+      {
+        x: 390, y: 330, r: 90, label: 'Look', name: 'the bed',
+        run: async w => {
+          if (!f('park') || state.hp >= MAX_HP) { await w.say(['Mohit could go back to sleep...', '...but the silence is too loud.']); return; }
+          await w.say(['Mohit flops onto the bed for a quick nap.', '...', 'PoiPoi naps on his face.']);
+          state.hp = MAX_HP;
+          state.save();
+          sfx.sparkle(); w.emote(w.player, `HP ${MAX_HP}`, '#7ef0a0');
+          await w.say('Mohit wakes up feeling much better. HP fully restored.');
+        }
+      },
+      homeCoke(0), homeCoke(1), homeCoke(2),
       look(270, 160, 40, ['The street outside is completely empty.'], "a pigeon outside the window"),
       look(372, 156, 34, ['A poster of The Ink Spots. 1939.', "Mohit's favourite song is still stuck in his head."], "the poster"),
       look(46, 410, 50, ['A pile of laundry. Clean or dirty?', "It's been there long enough that nobody knows."], "the laundry pile"),
@@ -367,6 +539,7 @@ export const MAPS: Record<MapName, MapDef> = {
     async enter(w) {
       if (f('woke')) {
         if (f('mart') && !f('home')) await homeTime(w);
+        else if (f('home') && !f('explore')) await exploreTime(w);
         return;
       }
       const p = w.player;
@@ -416,9 +589,9 @@ export const MAPS: Record<MapName, MapDef> = {
       { key: 'barricade', x: 40, y: 566 }, { key: 'barricade', x: 40, y: 618 },
       { key: 'barricade', x: 768, y: 70 }, { key: 'barricade', x: 768, y: 1482 },
       { key: 'mart', x: 330, y: 1390 }, { key: 'bin', x: 590, y: 1420 },
-      { key: 'neem', x: 620, y: 1300 }, { key: 'neem', x: 1060, y: 1380 }, { key: 'neem', x: 1430, y: 1420 }, { key: 'bush', x: 1250, y: 1290 }, { key: 'bench', x: 1290, y: 1420 }
+      { key: 'neem', x: 620, y: 1300 }, { key: 'neem', x: 1090, y: 1440 }, { key: 'swing', x: SW.x, y: SW.y }, { key: 'neem', x: 1430, y: 1420 }, { key: 'bush', x: 1250, y: 1290 }, { key: 'bench', x: 1290, y: 1420 }
     ],
-    blocks: [[1450, 528, 86, 96], [0, 528, 86, 96], [720, 0, 96, 64], [720, 1436, 96, 52]],
+    blocks: [[1450, 528, 86, 96], [0, 528, 86, 96], [720, 0, 96, 64], [720, 1436, 96, 52], [SW.x - 72, SW.y - 12, 36, 12], [SW.x + 36, SW.y - 12, 36, 12]],
     spawns: { apt: [336, 508], gym: [1056, 508], cafe: [336, 990], east: [1400, 576], mart: [330, 1430] },
     cart: () => f('mart') && !f('home'),
     roam: [[110, 505, 1320, 150], [684, 90, 164, 1320], [890, 740, 590, 700], [100, 690, 440, 90]],
@@ -452,7 +625,9 @@ export const MAPS: Record<MapName, MapDef> = {
       look(920, 790, 56, ['The chai tapri. The kettle is still warm.', 'Ten rupees a cup, and nobody to sell it.'], "the chai tapri"),
       look(600, 780, 44, ['The milk booth. The crates are full.'], "the milk crates"),
       look(1310, 778, 40, ['Gully cricket stumps. Someone was batting.', 'They left mid-over.'], "the cricket stumps"),
-      look(1384, 500, 60, ["Every shutter is down. Even Sharma ji's, and he never closes."], "Sharma ji's shutter")
+      look(1384, 500, 60, ["Every shutter is down. Even Sharma ji's, and he never closes."], "Sharma ji's shutter"),
+      { x: SW.x, y: SW.y + 10, r: 60, label: 'Look', name: 'the swing', when: () => !f('explore'), run: w => w.say(['A swing. Red paint, peeling.', "Mohit hasn't been on one since he was twelve."]) },
+      { x: SW.x, y: SW.y + 10, r: 60, label: 'Swing', name: 'the swing', when: () => f('explore'), run: parkSwing }
     ],
     target: () => !f('cityIntro') ? null
       : !f('gymSearched') ? [1056, 400]
@@ -460,8 +635,10 @@ export const MAPS: Record<MapName, MapDef> = {
       : !f('fed') ? null
       : !f('workout') ? [1056, 400]
       : !f('mart') ? [330, 1300]
-      : !f('home') ? [336, 400] : null,
+      : !f('home') ? [336, 400]
+      : f('explore') && !f('park') ? [SW.x, SW.y - 150] : null,
     setup(w) {
+      swingRest(w);
       const bag = w.add.image(-40, 560, 'pix-plasticbag').setScale(ART).setDepth(600);
       const roll = () => {
         bag.setPosition(-40, Phaser.Math.Between(545, 605));
@@ -474,6 +651,7 @@ export const MAPS: Record<MapName, MapDef> = {
       w.time.delayedCall(2500, roll);
     },
     async enter(w) {
+      if (f('home') && !f('explore')) { await exploreTime(w); return; }
       if (f('cityIntro')) return;
       await w.wait(400);
       await w.say(['Mohit steps outside.', 'Nobody. Not a single person. Not even a stray dog.']);
@@ -622,7 +800,12 @@ export const MAPS: Record<MapName, MapDef> = {
     spawns: { door: [312, 424] },
     spots: [
       at(150, 316, 56, grab('mSnack', ['Maggi. Six packets of Maggi.', 'And chips. And one more Maggi, for emergencies.'], 'The trolley has enough Maggi. (There is no such thing as enough Maggi.)', 'the chips')),
-      at(105, 166, 70, grab('mCoke', ['A whole fridge of Coke Zero.', M('Zero sugar. Zero people. Zero judgement.'), 'Mohit takes a crate.'], 'Still cold. Still zero.', 'the cold fridge')),
+      { x: 105, y: 166, r: 70, label: 'Drink', name: 'the cold fridge', when: () => f('explore'), run: w => drink(w, Phaser.Utils.Array.GetRandom([
+        ['Mohit takes a Coke Zero from the fridge.', '*tssss*', 'Gone in one go.'],
+        ['Another Coke Zero.', M('Hydration.')],
+        ['Mohit drinks a Coke Zero while staring at the GPU case.', 'Very relaxing.']
+      ])) },
+      { ...at(105, 166, 70, grab('mCoke', ['A whole fridge of Coke Zero.', M('Zero sugar. Zero people. Zero judgement.'), 'Mohit takes a crate.'], 'Still cold. Still zero.', 'the cold fridge')), when: () => !f('explore') },
       at(452, 172, 46, grab('mGpu', ['A glass case full of graphics cards.', 'The price tag says:', PFFT, M('Watch me.'), 'Mohit takes the biggest one. The box is bigger than PoiPoi.'], 'One is enough. Probably.', 'the GPU boxes')),
       at(552, 172, 46, grab('mRam', ['RAM sticks. 64 GB. With RGB lights.', 'Same price tag:', PFFT, M('Chrome is finally going to be happy.'), 'Into the trolley.'], 'The RGB is still blinking at him.', 'the blinking RAM')),
       at(312, 316, 56, grab('mFood', ['The cat food aisle.', 'Chicken. Tuna. Salmon pâté. Little pouches called "Gravy Lovers".', 'Mohit sweeps the whole shelf into the trolley.'], 'There is no cat food left on this shelf. It is all in the trolley.', 'the cat food', async w => {

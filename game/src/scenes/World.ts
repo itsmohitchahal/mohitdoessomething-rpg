@@ -10,7 +10,7 @@ import { input } from '../input';
 import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
 import { Roamers } from '../roamers';
-import type { FightResult } from './Fight';
+import type { FightResult, Place } from './Fight';
 
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
 // walking speed, rising to a jog after ~0.7s of continuous movement
@@ -290,6 +290,7 @@ export class World extends Phaser.Scene {
 
     sfx.ambient(m.ambient);
     ui.objective(objectiveText());
+    ui.stats(state.stat('solitude'));
     state.data.map = this.mapName; state.data.spawn = this.spawn; state.save();
 
     m.setup?.(this);
@@ -599,13 +600,13 @@ export class World extends Phaser.Scene {
   }
 
   /** Runs a battle on top of this one and waits for its result: the kitchen bag, or a monster by id. */
-  battle(foe?: string): Promise<string | FightResult> {
+  battle(foe?: string, place?: Place): Promise<string | FightResult> {
     return new Promise(resolve => {
       const hud = document.querySelector('#hud') as HTMLElement;
       hud.hidden = true;
       this.scene.pause();
       this.scene.launch(foe ? 'Fight' : 'Battle', {
-        foe,
+        foe, place,
         done: (r: string) => { hud.hidden = false; this.scene.resume(); resolve(r); }
       });
     });

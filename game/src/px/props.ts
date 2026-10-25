@@ -848,6 +848,64 @@ export const PIX: Record<string, PixProp> = {
       p.outline();
     }
   },
+  swing: {
+    w: 48, h: 46,
+    draw(p) {
+      const red = '#c8443a', redL = '#e8665a', redD = '#8f2c28';
+      p.shadow(6, 44, 6, 1).shadow(42, 44, 6, 1).shadow(24, 44, 10, 1);
+      for (const x of [6, 42]) {
+        p.line(x, 3, x - 5, 44, redD).line(x - 1, 3, x - 6, 44, red);
+        p.line(x, 3, x + 5, 44, red).line(x + 1, 3, x + 6, 44, redD);
+      }
+      p.r(4, 2, 40, 3, red).r(4, 2, 40, 1, redL).r(4, 4, 40, 1, redD);
+      p.r(3, 1, 4, 5, '#f2b632').r(41, 1, 4, 5, '#f2b632');
+      p.outline();
+    }
+  },
+  swingchain: {
+    w: 16, h: 28,
+    draw(p) {
+      for (const x of [2, 13]) for (let y = 0; y < 27; y++) p.p(x, y, y % 2 ? '#8d8996' : '#cfcad8');
+      p.r(2, 0, 1, 1, INK).r(13, 0, 1, 1, INK);
+    }
+  },
+  swingseat: {
+    w: 16, h: 5,
+    draw(p) {
+      p.r(1, 1, 14, 3, C.wood[1]).r(1, 1, 14, 1, C.wood[0]).r(1, 3, 14, 1, C.wood[2]);
+      p.outline();
+    }
+  },
+  coke: {
+    w: 7, h: 13,
+    draw(p) {
+      p.shadow(3, 12, 3, 1);
+      p.r(2, 4, 3, 8, '#3a1d12').r(3, 2, 1, 2, '#3a1d12').r(3, 1, 1, 1, '#1a1a1a');
+      p.r(2, 6, 3, 3, '#1a1a1a').p(3, 7, '#e83a3a').p(2, 4, '#7a4a32');
+      p.outline();
+    }
+  },
+  bottle: {
+    w: 7, h: 13,
+    draw(p) {
+      p.r(2, 4, 3, 8, '#cfe6f2').r(3, 2, 1, 2, '#cfe6f2').r(3, 1, 1, 1, '#1a1a1a');
+      p.r(2, 6, 3, 3, '#1a1a1a').p(3, 7, '#e83a3a').p(2, 5, '#ffffff').p(2, 10, '#ffffff');
+      p.outline();
+    }
+  },
+  phone: {
+    w: 6, h: 9,
+    draw(p) {
+      p.r(1, 1, 4, 7, '#2b2430').r(2, 2, 2, 4, '#9fe8ff').p(2, 2, '#ffffff').p(3, 7, '#5d5a66');
+      p.outline();
+    }
+  },
+  scratch: {
+    w: 11, h: 11,
+    draw(p) {
+      for (const d of [0, 3, 6]) p.line(2 + d, 1, d - 1, 9, '#ffffff').line(3 + d, 1, d, 9, '#ff4f8b');
+    }
+  },
   heart: {
     w: 7, h: 7,
     draw(p) {

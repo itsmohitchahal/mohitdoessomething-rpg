@@ -8,6 +8,7 @@ import { initTitle } from './title.js';
 import { state, type MapName } from './state';
 import { ui } from './ui';
 import { sfx } from './audio';
+import { pause } from './pause';
 import './input';
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -39,6 +40,7 @@ addEventListener('resize', () => {
 });
 
 const title = initTitle({
+  onLoad: () => { sfx.unlock(); pause.showLoad(); },
   onStart: async () => {
     sfx.unlock();
     if (state.has()) {
@@ -68,16 +70,35 @@ async function play(map: MapName, spawn: string) {
   game.scene.start('World', { map, spawn });
 }
 
-game.events.on('to-title', () => {
+function toTitle() {
   game.scene.stop('World');
   game.scene.stop('Battle');
   game.scene.stop('Fight');
   $('#game').hidden = true;
   $('#hud').hidden = true;
   ui.objective(null);
+  ui.stats(null);
   sfx.ambient(null);
   sfx.rain(false);
   title.show();
+}
+game.events.on('to-title', toTitle);
+
+pause.init({
+  canPause: () => {
+    const w = game.scene.getScene('World') as World;
+    return !$('#hud').hidden && game.scene.isActive('World') && !w.locked && !w.leaving && !ui.busy;
+  },
+  setPaused: p => {
+    if (p) { game.scene.pause('World'); sfx.rain(false); } else game.scene.resume('World');
+    sfx.ambient(p ? null : (game.scene.getScene('World') as World).def.ambient);
+  },
+  onLoad: s => {
+    state.use(s);
+    sfx.unlock();
+    play(state.data.map, state.data.spawn);
+  },
+  onTitle: toTitle
 });
 
 const mute = $('#mute');

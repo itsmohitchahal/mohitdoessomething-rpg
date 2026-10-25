@@ -23,6 +23,24 @@ interface Walker { def: Npc; s: Phaser.GameObjects.Sprite; path: Pt[]; i: number
 const inside = ([x, y, w, h]: Rect, px: number, py: number) => px >= x && px <= x + w && py >= y && py <= y + h;
 const randIn = ([x, y, w, h]: Rect): Pt => [x + Math.random() * w, y + Math.random() * h];
 
+/** The ground opens up and a monster sprite pushes its way out of it. */
+export function crawlOut(w: World, s: Phaser.GameObjects.Sprite) {
+  const x = s.x;
+  s.setScale(ART, 0).setAlpha(0.6);
+  const hole = w.add.ellipse(s.x, s.y - 2, 10, 4, 0x1b1622, 0.85).setDepth(s.y - 1);
+  w.tweens.add({ targets: hole, width: 70, height: 20, duration: 500, ease: 'Quad.easeOut' });
+  sfx.thud();
+  for (let i = 0; i < 9; i++) {
+    const c = w.add.image(s.x + Phaser.Math.Between(-20, 20), s.y - 4, 'dot').setScale(ART).setTint(0x5a4a3e).setDepth(s.y + 1);
+    w.tweens.add({ targets: c, x: c.x + Phaser.Math.Between(-40, 40), y: c.y - Phaser.Math.Between(20, 50), duration: 380, yoyo: true, ease: 'Quad.easeOut', delay: 300 + i * 40, onComplete: () => c.destroy() });
+  }
+  return new Promise<void>(done => w.tweens.add({
+    targets: s, scaleY: ART, alpha: 1, duration: 1400, delay: 450, ease: 'Back.easeOut',
+    onUpdate: () => { s.x = x + Math.sin(w.time.now / 30) * 1.5; },
+    onComplete: () => { s.x = x; w.tweens.add({ targets: hole, alpha: 0, duration: 1200, onComplete: () => hole.destroy() }); done(); }
+  }));
+}
+
 export class Roamers {
   private mons: Mon[] = [];
   private people: Walker[] = [];
@@ -87,21 +105,8 @@ export class Roamers {
   }
 
   private emerge(m: Mon) {
-    const w = this.w, s = m.s;
-    s.setScale(ART, 0).setAlpha(0.6);
-    const hole = w.add.ellipse(s.x, s.y - 2, 10, 4, 0x1b1622, 0.85).setDepth(s.y - 1);
-    w.tweens.add({ targets: hole, width: 70, height: 20, duration: 500, ease: 'Quad.easeOut' });
-    sfx.thud();
-    for (let i = 0; i < 9; i++) {
-      const c = w.add.image(s.x + Phaser.Math.Between(-20, 20), s.y - 4, 'dot').setScale(ART).setTint(0x5a4a3e).setDepth(s.y + 1);
-      w.tweens.add({ targets: c, x: c.x + Phaser.Math.Between(-40, 40), y: c.y - Phaser.Math.Between(20, 50), duration: 380, yoyo: true, ease: 'Quad.easeOut', delay: 300 + i * 40, onComplete: () => c.destroy() });
-    }
-    w.tweens.add({
-      targets: s, scaleY: ART, alpha: 1, duration: 1400, delay: 450, ease: 'Back.easeOut',
-      onUpdate: () => { s.x = m.tx + Math.sin(w.time.now / 30) * 1.5; },
-      onComplete: () => { m.up = true; s.x = m.tx; w.tweens.add({ targets: hole, alpha: 0, duration: 1200, onComplete: () => hole.destroy() }); }
-    });
-    w.tweens.add({ targets: m.glow, alpha: 0.18, duration: 1400, delay: 450 });
+    crawlOut(this.w, m.s).then(() => { m.up = true; });
+    this.w.tweens.add({ targets: m.glow, alpha: 0.18, duration: 1400, delay: 450 });
   }
 
   private spawnPerson(progress = 0) {

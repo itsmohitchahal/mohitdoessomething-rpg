@@ -6,7 +6,7 @@ export const MON_W = 24, MON_H = 24;
 export type Effect = {
   dmg?: [number, number];   // damage to Mohit
   stun?: boolean;           // Mohit loses his next turn
-  burn?: number;            // Mohit takes 2 damage for this many turns
+  burn?: number;            // Mohit takes 10 damage for this many turns
   weaken?: number;          // Mohit's attacks do half damage for this many turns
   blind?: number;           // Mohit's attacks miss more for this many turns
   guard?: number;           // monster takes half damage for this many turns
@@ -29,13 +29,13 @@ function eyes(p: Px, x: number, y: number, gap: number, c: string) {
 
 export const MONSTERS: Monster[] = [
   {
-    id: 'puddle', name: 'Puddle Shade', hp: 14, befriend: 0.45, runChance: 0.7,
+    id: 'puddle', name: 'Puddle Shade', hp: 35, befriend: 0.45, runChance: 0.7,
     intro: 'A puddle stands up. It has eyes now.', win: 'The Puddle Shade splashes flat and soaks back into the road.',
     friend: 'The Puddle Shade ripples happily and drains away into a gutter.',
     skills: [
-      { name: 'Splash', weight: 45, text: 'It slaps a wave of cold gutter water at Mohit!', fx: { dmg: [2, 4] } },
+      { name: 'Splash', weight: 45, text: 'It slaps a wave of cold gutter water at Mohit!', fx: { dmg: [10, 20] } },
       { name: 'Soak', weight: 30, text: 'Mohit is soaked through. His arms feel heavy.', fx: { weaken: 2 } },
-      { name: 'Drip Drop', weight: 25, text: 'It soaks up the rain and grows a little.', fx: { heal: 3 } }
+      { name: 'Drip Drop', weight: 25, text: 'It soaks up the rain and grows a little.', fx: { heal: 8 } }
     ],
     draw(p, f) {
       const w = f ? 9 : 10, h = f ? 9 : 8;
@@ -49,13 +49,13 @@ export const MONSTERS: Monster[] = [
     }
   },
   {
-    id: 'wire', name: 'Wire Wraith', hp: 16, befriend: 0.25, runChance: 0.6,
+    id: 'wire', name: 'Wire Wraith', hp: 40, befriend: 0.25, runChance: 0.6,
     intro: 'The overhead wires knot themselves into a body.', win: 'The Wire Wraith fizzles, sparks once, and goes dark.',
     friend: 'The Wire Wraith hums a happy little 50 Hz hum and climbs back up a pole.',
     skills: [
-      { name: 'Zap', weight: 40, text: 'ZZZT! A jolt runs up Mohit\'s arm.', fx: { dmg: [3, 5] } },
+      { name: 'Zap', weight: 40, text: 'ZZZT! A jolt runs up Mohit\'s arm.', fx: { dmg: [15, 25] } },
       { name: 'Entangle', weight: 25, text: 'Wires wrap around Mohit\'s ankles. He can\'t move!', fx: { stun: true } },
-      { name: 'Short Circuit', weight: 15, text: 'It overloads! Sparks everywhere, including on itself.', fx: { dmg: [5, 7], self: 2 } },
+      { name: 'Short Circuit', weight: 15, text: 'It overloads! Sparks everywhere, including on itself.', fx: { dmg: [25, 35], self: 5 } },
       { name: 'Hum', weight: 20, text: 'It just... hums. Ominously.', fx: {} }
     ],
     draw(p, f) {
@@ -71,13 +71,13 @@ export const MONSTERS: Monster[] = [
     }
   },
   {
-    id: 'kulhad', name: 'Kulhad Golem', hp: 20, befriend: 0.35, runChance: 0.75,
+    id: 'kulhad', name: 'Kulhad Golem', hp: 50, befriend: 0.35, runChance: 0.75,
     intro: 'Broken chai cups scrape together into something tall.', win: 'The Kulhad Golem crumbles into a heap of clay shards.',
     friend: 'The Kulhad Golem pours out a little tea for PoiPoi and shuffles off.',
     skills: [
-      { name: 'Clay Toss', weight: 50, text: 'It hurls a chipped kulhad at Mohit!', fx: { dmg: [2, 4] } },
+      { name: 'Clay Toss', weight: 50, text: 'It hurls a chipped kulhad at Mohit!', fx: { dmg: [10, 20] } },
       { name: 'Crumble Guard', weight: 30, text: 'It hunches its cups together. Harder to hurt now.', fx: { guard: 2 } },
-      { name: 'Chai Spill', weight: 20, text: 'Scalding chai splashes on Mohit! It keeps burning.', fx: { dmg: [1, 2], burn: 2 } }
+      { name: 'Chai Spill', weight: 20, text: 'Scalding chai splashes on Mohit! It keeps burning.', fx: { dmg: [5, 10], burn: 2 } }
     ],
     draw(p, f) {
       p.shadow(12, 22, 9, 2);
@@ -94,13 +94,13 @@ export const MONSTERS: Monster[] = [
     }
   },
   {
-    id: 'auto', name: 'Bhoot Auto', hp: 22, befriend: 0.2, runChance: 0.3,
+    id: 'auto', name: 'Bhoot Auto', hp: 55, befriend: 0.2, runChance: 0.3,
     intro: 'An empty auto rolls up by itself. Its one headlight blinks at Mohit.', win: 'The Bhoot Auto sputters, coughs black smoke and rolls away into nothing.',
     friend: 'The Bhoot Auto lets out a soft little beep and drives off to find a passenger.',
     skills: [
-      { name: 'Ram', weight: 35, text: 'It revs and rams straight into Mohit!', fx: { dmg: [4, 6] } },
+      { name: 'Ram', weight: 35, text: 'It revs and rams straight into Mohit!', fx: { dmg: [20, 30] } },
       { name: 'HONK', weight: 30, text: 'HOOOONK! Mohit freezes in place.', fx: { stun: true } },
-      { name: 'Meter Down', weight: 20, text: 'The meter starts running... on Mohit.', fx: { dmg: [2, 3], drain: true } },
+      { name: 'Meter Down', weight: 20, text: 'The meter starts running... on Mohit.', fx: { dmg: [10, 15], drain: true } },
       { name: 'Reverse', weight: 15, text: 'It reverses suddenly, out of reach.', fx: { evade: true } }
     ],
     draw(p, f) {
@@ -117,13 +117,14 @@ export const MONSTERS: Monster[] = [
     }
   },
   {
-    id: 'bag', name: 'Plastic Phantom', hp: 12, befriend: 0.55, runChance: 0.85,
-    intro: 'A plastic bag drifts up off the road. It does not drift back down.', win: 'The Plastic Phantom deflates with a sad crinkle.',
+    id: 'bag', name: 'Plastic Phantom', hp: 30, befriend: 0.1, runChance: 0.85,
+    intro: 'A plastic bag drifts up out of the ground. It does not drift back down.', win: 'The Plastic Phantom deflates with a sad crinkle.',
     friend: 'The Plastic Phantom floats up and away on the wind. Free at last.',
     skills: [
-      { name: 'Smother', weight: 40, text: 'It wraps itself around Mohit\'s face!', fx: { dmg: [2, 4] } },
-      { name: 'Float Away', weight: 35, text: 'A gust lifts it just out of reach.', fx: { evade: true } },
-      { name: 'Crinkle', weight: 25, text: '*crinkle crinkle*. Deeply annoying, but harmless.', fx: {} }
+      { name: 'Smother', weight: 45, text: 'It wraps itself around Mohit\'s face!', fx: { dmg: [12, 18] } },
+      { name: 'Static Cling', weight: 20, text: 'It sticks to Mohit\'s arm and will not let go. *zap*', fx: { dmg: [6, 10] } },
+      { name: 'Float Away', weight: 20, text: 'A gust lifts it just out of reach.', fx: { evade: true } },
+      { name: 'Crinkle', weight: 15, text: '*crinkle crinkle*. Deeply annoying, but harmless.', fx: {} }
     ],
     draw(p, f) {
       const s = f ? 1 : 0;
@@ -136,13 +137,13 @@ export const MONSTERS: Monster[] = [
     }
   },
   {
-    id: 'smog', name: 'Smog Wisp', hp: 15, befriend: 0.3, runChance: 0.7,
+    id: 'smog', name: 'Smog Wisp', hp: 38, befriend: 0.3, runChance: 0.7,
     intro: 'The haze thickens into a lump. The lump looks at Mohit.', win: 'The Smog Wisp thins out and blows away.',
     friend: 'The Smog Wisp lightens to a pale, harmless mist and drifts off.',
     skills: [
-      { name: 'Choke', weight: 35, text: 'It pours itself into Mohit\'s lungs. *cough cough*', fx: { dmg: [3, 4] } },
-      { name: 'Cough Cloud', weight: 40, text: 'Mohit can barely see through the smog.', fx: { dmg: [1, 2], blind: 2 } },
-      { name: 'Haze', weight: 25, text: 'It soaks up the city air and thickens.', fx: { heal: 3 } }
+      { name: 'Choke', weight: 35, text: 'It pours itself into Mohit\'s lungs. *cough cough*', fx: { dmg: [15, 20] } },
+      { name: 'Cough Cloud', weight: 40, text: 'Mohit can barely see through the smog.', fx: { dmg: [5, 10], blind: 2 } },
+      { name: 'Haze', weight: 25, text: 'It soaks up the city air and thickens.', fx: { heal: 8 } }
     ],
     draw(p, f) {
       p.shadow(12, 22, 9, 2);
