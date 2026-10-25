@@ -45,4 +45,4 @@ export const isNight = (min: number) => min < 345 || min >= 1150;
 
 export const day = () => state.data.day ?? 1;
 /** It rains all day, every second day (outdoors only). Adding #rain to the URL forces it on for previewing. */
-export const isRainDay = () => day() % 2 === 0 || location.hash === '#rain';
+export const isRainDay = () => /* state.flag('metPoi') || */ day() % 2 === 0 || location.hash === '#rain';

@@ -117,6 +117,13 @@ const PAINTERS: Record<string, Painter> = {
     }
   },
   q(p, x, y, c) { PAINTERS.K(p, x, y, c); p.r(x, y + 12, 16, 4, '#9b98a8').r(x, y + 12, 16, 1, INK); },
+  // supermarket: white wall with the shop's green stripe, glossy floor tiles with ceiling-light reflections
+  V(p, x, y, { r }) { p.r(x, y, 16, 16, '#f2f4f1').r(x, y + 9, 16, 3, '#3f9a5a').r(x, y + 12, 16, 1, '#f2a33a'); if (r() < 0.2) p.p(x + r() * 16, y + r() * 8, '#e3e7e2'); },
+  v(p, x, y, { tx, ty }) {
+    p.r(x, y, 16, 16, (tx + ty) % 2 ? '#e9ebe6' : '#dfe3dc');
+    p.r(x + 15, y, 1, 16, '#c3c9c0').r(x, y + 15, 16, 1, '#c3c9c0');
+    if (tx % 3 === 1) p.r(x + 3, y + 4, 9, 1, '#ffffff').r(x + 5, y + 6, 5, 1, '#f8faf6');
+  },
   '.': (p, x, y) => { p.r(x, y, 16, 16, '#140d1f'); }
 };
 

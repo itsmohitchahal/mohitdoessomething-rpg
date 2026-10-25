@@ -1,5 +1,5 @@
 // Story progress and save data (one save slot, in this browser).
-export type MapName = 'room' | 'city' | 'gym' | 'cafe' | 'kitchen';
+export type MapName = 'room' | 'city' | 'gym' | 'cafe' | 'kitchen' | 'mart';
 
 export interface SaveData {
   v: 1;
@@ -44,7 +44,9 @@ export const state = {
 export function hazeLevel(): number {
   let v = 1;
   if (state.flag('metPoi')) v -= 0.08;
-  if (state.flag('fed')) v -= 0.04;
-  if (state.flag('ch1Done')) v -= 0.04;
+  if (state.flag('fed')) v -= 0.06;
+  if (state.flag('workout')) v -= 0.1;
+  if (state.flag('mart')) v -= 0.1;
+  if (state.flag('home')) v -= 0.12;
   return v;
 }

@@ -6,6 +6,7 @@ import { ui, hi } from './ui';
 import { sfx } from './audio';
 import { type Px, INK } from './px/paint';
 import { ART } from './px/scale';
+import { runWorkout } from './workout';
 
 type Ambient = 'wind' | 'drone' | 'gym' | 'hum' | null;
 const T = 48;
@@ -37,7 +38,13 @@ export interface MapDef {
   update?: (w: World, dt: number) => void;
   hints?: () => boolean;
   target?: () => [number, number] | null;
+  cart?: () => boolean;                               // Mohit is pushing the shopping trolley here
+  poiSpots?: PoiSpot[];                               // things PoiPoi wanders between when he's at home
+  roam?: [number, number, number, number][];         // where monsters wander once it rains: x, y, w, h
+  walks?: [number, number][][];                       // routes townspeople take, from one edge of the map to another
 }
+
+export interface PoiSpot { x: number; y: number; act: 'box' | 'bat' | 'scratch' | 'piano' | 'guitar' | 'laptop' | 'nap' | 'window'; toy?: string; depth?: number }
 
 const f = (k: string) => state.flag(k);
 const M = (text: string) => ({ who: 'MOHIT', text });
@@ -51,8 +58,10 @@ export function objectiveText(): string | null {
   if (!f('cafe')) return 'Open the café with the keys';
   if (!f('metPoi')) return 'Check the café kitchen';
   if (!f('fed')) return 'Make the cat something to eat';
-  if (!f('ch1Done')) return 'Explore the town with PoiPoi';
-  return 'Keep exploring';
+  if (!f('workout')) return 'Get the perfect workout at the gym';
+  if (!f('mart')) return f('mFood') && f('mToys') ? 'Check out at the till' : f('cart') ? 'Get cat food and cat toys' : 'Raid the supermarket';
+  if (!f('home')) return 'Take everything home';
+  return 'Hang out with PoiPoi';
 }
 
 /** A door: walks you to another map, unless PoiPoi has wandered off. */
@@ -151,38 +160,140 @@ async function feed(w: World) {
   await w.say(P('Meow.'));
   await w.say(M("...Right. Cats can't talk."));
   s.play('p-loaf');
-  await w.say(M("Okay. Let's go find out what happened. Together."));
-  sfx.sparkle();
+  await w.wait(500);
+  await w.say(['Mohit sits down on the kitchen floor next to PoiPoi.', 'It is very quiet.', 'No traffic. No group chat. Nobody asking him what his "plan" is.']);
+  await w.say(M('...Wait.'));
+  await w.say([M('No people in this world?'), M('AND I have a cat now?')]);
+  sfx.sparkle(); w.emote(p, '!', '#ffc23c');
+  await w.wait(300);
+  await w.say(M('This is THE life.'));
   state.set('fed');
   w.recolor();
+  await w.say([M('You know what this means, PoiPoi?'), M('An empty gym. Nobody watching.'), M("I can finally try the weird exercises I've been too shy to do in front of people.")]);
   w.followPaused = false;
   w.trail = [{ x: s.x, y: s.y }, { x: p.x, y: p.y }];
-  ui.objective('Explore the town with PoiPoi');
+  ui.objective(objectiveText());
   ui.toast('PoiPoi follows you around now. Mostly.', 2600);
 }
 
-async function chapterEnd(w: World) {
-  await w.say(['The road out of town is blocked.']);
-  await w.say(M("Huh. Guess we're not leaving the easy way."));
-  if (w.poi) w.emote(w.poi.sprite, '?', '#ffc23c', 60);
-  await w.say(['PoiPoi is looking at a leaf.']);
-  await w.say(M("...We'll figure it out. Together."));
-  state.set('ch1Done');
+/* ---------- gym, round two ---------- */
+async function workoutTime(w: World) {
+  await w.wait(300);
+  await w.say([M('An empty gym.'), M('Nobody watching. Nobody judging.')]);
+  if (w.poi) w.emote(w.poi.sprite, '?', '#ffffff', 60);
+  await w.say(M('PoiPoi. Today we do the weird ones.'));
+  sfx.stinger(); w.shake(300, 0.008); w.flash(200);
+  await ui.banner('WORKOUT TIME!', 'workout', 1300);
+  await runWorkout();
+  state.set('workout');
   w.recolor();
-  sfx.fanfare();
-  const c = await ui.overlay(
-    `<p class="kicker">END OF</p><h2>CHAPTER 1</h2>
-     <p>Mohit and PoiPoi set out to find where everyone went.</p>
-     <p class="small">Chapter 2 is on its way. Follow <a href="https://www.instagram.com/mohitdoessomething/" target="_blank" rel="noopener">@mohitdoessomething</a> so you don't miss it.</p>`,
-    [{ label: 'Keep exploring', value: 'stay', primary: true }, { label: 'Back to title', value: 'title' }], 'end');
   ui.objective(objectiveText());
-  if (c === 'title') w.game.events.emit('to-title');
+  await w.say([M('Okay. Now I am starving.'), M("There's a supermarket past the café. And nobody at the till.")]);
+  ui.toast('The supermarket is south of the café.<small>Follow the arrow.</small>', 4200);
 }
+
+/* ---------- the supermarket ---------- */
+const ITEMS = ['mSnack', 'mCoke', 'mGpu', 'mRam', 'mFood', 'mToys'];
+export const cartLevel = () => { const n = ITEMS.filter(f).length; return n === 0 ? 0 : n <= 2 ? 1 : n <= 4 ? 2 : 3; };
+const PFFT = `<b>"Pfft. If you're shopping here, you probably can't buy this!"</b>`;
+
+function grab(flag: string, first: Parameters<World['say']>[0], again: Parameters<World['say']>[0], name: string, after?: (w: World) => Promise<void>): Spot {
+  return {
+    x: 0, y: 0, r: 0, label: 'Take', name,
+    run: async w => {
+      if (f(flag)) { await w.say(again); return; }
+      await w.say(first);
+      state.set(flag);
+      sfx.rustle(); w.emote(w.player, '+1', '#7ef0a0');
+      await after?.(w);
+      ui.objective(objectiveText());
+    }
+  };
+}
+const at = (x: number, y: number, r: number, s: Spot): Spot => ({ ...s, x, y, r });
+
+async function checkout(w: World) {
+  if (f('mart')) { await w.say(['The till is still unattended.', 'The note is still there.']); return; }
+  if (!f('mFood') || !f('mToys')) { await w.say(M("Not yet. PoiPoi's stuff first.")); return; }
+  await w.say(['Nobody at the till.', 'Mohit scans everything himself anyway.', '*beep* *beep* *beep* *beep*']);
+  await w.say(f('mGpu') || f('mRam') ? 'TOTAL: ₹3,48,612.' : 'TOTAL: ₹4,286.');
+  await w.say(['Mohit checks his pockets.', '₹500, and a Metro card with -₹20 on it.']);
+  await w.say(['He leaves the ₹500 on the counter, with a note:', '<b>"Will pay the rest later. —Mohit (44 followers)"</b>']);
+  state.set('mart');
+  sfx.sparkle();
+  w.recolor();
+  ui.objective(objectiveText());
+  await w.say(M("Okay, PoiPoi. Let's go home."));
+}
+
+/* ---------- home ---------- */
+const HOME_TOYS: [string, number, number, boolean][] = [
+  ['gpubox', 160, 330, false], ['scratcher', 448, 280, false], ['foodstack', 384, 256, false],
+  ['yarn', 270, 398, true], ['wand', 350, 344, true], ['toymouse', 118, 402, true]
+];
+function placeToy(w: World, key: string, x: number, y: number, floor: boolean) {
+  const img = w.prop(key, x, y, false, floor);
+  if (floor) img.setDepth(y - 30);
+  w.extra['toy-' + key] = img;
+  if (key === 'gpubox') w.extra.boxFront = w.add.image(x, y, 'pix-gpuboxFront').setOrigin(0.5, 1).setScale(ART).setDepth(y + 3);
+  return img;
+}
+
+async function homeTime(w: World) {
+  const poi = w.poi;
+  w.followPaused = true;
+  await w.wait(400);
+  await w.say(['Home.', 'Mohit parks the trolley by the bed. It barely fit through the door.']);
+  w.dropCart();
+  await w.say(M('Okay, PoiPoi. Unboxing time.'));
+  for (const [key, x, y, floor] of HOME_TOYS) {
+    const img = placeToy(w, key, x, y, floor);
+    img.setScale(0); w.tweens.add({ targets: [img, key === 'gpubox' ? w.extra.boxFront : img], scale: ART, duration: 260, ease: 'Back.easeOut' });
+    sfx.sparkle();
+    await w.wait(280);
+  }
+  await w.say(['A scratching post. A feather wand. A ball of yarn. A toy mouse.', 'And eleven kinds of cat food.']);
+  await w.say(M('Go on. Pick one.'));
+  if (poi) {
+    const s = poi.sprite;
+    await w.walk(s, 270, 392, 90);
+    await w.wait(300);
+    await w.walk(s, 350, 340, 90);
+    await w.wait(300);
+    await w.walk(s, 160, 322, 90);
+    s.setDepth(332).play('p-loaf');
+    poi.depth = 332;
+    sfx.meow(true); w.float(s.x, s.y - 50, 'pix-heart', 1.2);
+    await w.say(['PoiPoi walks past every single toy...', '...and climbs into the empty GPU box.']);
+    await w.say([M('...'), M('Of course.')]);
+    await w.wait(500);
+    poi.depth = null;
+    await w.walk(s, 262, 396, 110);
+    for (let i = 0; i < 3; i++) {
+      sfx.rustle();
+      const yarn = w.extra['toy-yarn'] as Phaser.GameObjects.Image;
+      w.tweens.add({ targets: yarn, x: yarn.x + Phaser.Math.Between(-14, 14), duration: 200, ease: 'Quad.easeOut' });
+      await w.tween({ targets: s, y: s.y - 14, duration: 150, yoyo: true, ease: 'Quad.easeOut' });
+    }
+    s.play('p-idle');
+  }
+  await w.say(['A few minutes later he finds the yarn.', 'Then the feather wand. Then the yarn again.']);
+  await w.say(['Mohit sits on the floor and watches him play.', 'The room feels a lot less quiet now.']);
+  state.set('home');
+  w.recolor();
+  ui.objective(objectiveText());
+  sfx.sparkle();
+  await w.wait(600);
+  await w.say('So far, Mohit is happy.');
+  w.followPaused = false;
+  if (poi) poi.goHome(MAPS.room.poiSpots!);
+}
+
 
 /* ---------- city layout ---------- */
 function cityTiles(): string[] {
   const rows: string[] = [];
-  for (let y = 0; y < 24; y++) {
+  for (let y = 0; y < 31; y++) {
     let row = '';
     for (let x = 0; x < 32; x++) {
       let c = 'p';
@@ -234,6 +345,14 @@ export const MAPS: Record<MapName, MapDef> = {
     ],
     lights: [[270, 150, '#fff1c9', 110], [130, 80, '#9fd8ff', 70]],
     spawns: { wake: [300, 380], door: [240, 404] },
+    cart: () => f('mart') && !f('home'),
+    poiSpots: [
+      { x: 160, y: 322, act: 'box', depth: 332 }, { x: 262, y: 396, act: 'bat', toy: 'yarn' }, { x: 340, y: 348, act: 'bat', toy: 'wand' },
+      { x: 128, y: 404, act: 'bat', toy: 'toymouse' }, { x: 430, y: 290, act: 'scratch' }, { x: 330, y: 166, act: 'piano', depth: 200 },
+      { x: 222, y: 198, act: 'guitar' }, { x: 84, y: 156, act: 'laptop', depth: 200 }, { x: 410, y: 360, act: 'nap', depth: 440 },
+      { x: 56, y: 404, act: 'nap', depth: 420 }, { x: 270, y: 164, act: 'window' }, { x: 46, y: 314, act: 'nap', depth: 320 }
+    ],
+    setup(w) { if (f('home')) for (const [key, x, y, floor] of HOME_TOYS) placeToy(w, key, x, y, floor); },
     spots: [
       look(64, 198, 58, ["Mohit's laptop. Instagram is still open.", '44 followers. Still 44.'], "Mohit's laptop"),
       { x: 330, y: 198, r: 60, label: 'Play', name: 'the piano keys', run: async w => { sfx.piano(); await w.wait(300); await w.say('Mohit plays a few notes. It sounds nice, actually.'); } },
@@ -246,7 +365,10 @@ export const MAPS: Record<MapName, MapDef> = {
       door(240, 424, 'city', 'apt', 'Go out')
     ],
     async enter(w) {
-      if (f('woke')) return;
+      if (f('woke')) {
+        if (f('mart') && !f('home')) await homeTime(w);
+        return;
+      }
       const p = w.player;
       p.stop(); p.setFrame('blink');
       w.cameras.main.fadeIn(1400, 0, 0, 0);
@@ -272,7 +394,7 @@ export const MAPS: Record<MapName, MapDef> = {
     tiles: cityTiles(), ambient: 'wind',
     decorate(p) {
       for (let x = 2; x < 512; x += 10) if (x < 208 || x > 304) p.r(x, 191, 5, 2, '#f2d36b');
-      for (let y = 2; y < 384; y += 10) if (y < 144 || y > 240) p.r(255, y, 2, 5, '#f2d36b');
+      for (let y = 2; y < 496; y += 10) if (y < 144 || y > 240) p.r(255, y, 2, 5, '#f2d36b');
       [[96, 196], [200, 340], [420, 186]].forEach(([x, y]) => p.disc(x, y, 4, '#4a4452').disc(x, y, 3, '#5a5462').line(x - 2, y, x + 2, y, '#3d3746'));
     },
     wires: cityWires(),
@@ -292,10 +414,19 @@ export const MAPS: Record<MapName, MapDef> = {
       ...Array.from({ length: 13 }, (_, i) => 888 + i * 48).filter(x => x < 1140 || x > 1212).map(x => ({ key: 'railing', x, y: 700 })),
       { key: 'barricade', x: 1500, y: 566 }, { key: 'barricade', x: 1500, y: 618 },
       { key: 'barricade', x: 40, y: 566 }, { key: 'barricade', x: 40, y: 618 },
-      { key: 'barricade', x: 768, y: 70 }, { key: 'barricade', x: 768, y: 1146 }
+      { key: 'barricade', x: 768, y: 70 }, { key: 'barricade', x: 768, y: 1482 },
+      { key: 'mart', x: 330, y: 1390 }, { key: 'bin', x: 590, y: 1420 },
+      { key: 'neem', x: 620, y: 1300 }, { key: 'neem', x: 1060, y: 1380 }, { key: 'neem', x: 1430, y: 1420 }, { key: 'bush', x: 1250, y: 1290 }, { key: 'bench', x: 1290, y: 1420 }
     ],
-    blocks: [[1450, 528, 86, 96], [0, 528, 86, 96], [720, 0, 96, 64], [720, 1100, 96, 52]],
-    spawns: { apt: [336, 508], gym: [1056, 508], cafe: [336, 990], east: [1400, 576] },
+    blocks: [[1450, 528, 86, 96], [0, 528, 86, 96], [720, 0, 96, 64], [720, 1436, 96, 52]],
+    spawns: { apt: [336, 508], gym: [1056, 508], cafe: [336, 990], east: [1400, 576], mart: [330, 1430] },
+    cart: () => f('mart') && !f('home'),
+    roam: [[110, 505, 1320, 150], [684, 90, 164, 1320], [890, 740, 590, 700], [100, 690, 440, 90]],
+    walks: [
+      [[-40, 516], [1576, 516]], [[-40, 662], [1576, 662]],
+      [[696, -40], [696, 1530]], [[842, -40], [842, 1530]],
+      [[1576, 888], [842, 888], [842, 1530]], [[1176, 1530], [1176, 662], [1576, 662]]
+    ],
     spots: [
       door(336, 484, 'room', 'door', 'Go in'),
       door(1056, 484, 'gym', 'door', 'Enter'),
@@ -306,10 +437,16 @@ export const MAPS: Record<MapName, MapDef> = {
         state.set('sawNote');
         return false;
       }),
-      { x: 1420, y: 576, r: 80, label: 'Look', name: 'the barricade', run: async w => { if (f('fed')) await chapterEnd(w); else await w.say(['Road closed.', 'Who even put this here?']); } },
+      look(1420, 576, 80, ['Road closed.', 'Who even put this here?'], 'the barricade'),
       look(120, 576, 80, ['Also closed.'], "the barricade"),
       look(768, 110, 60, ['This one too. Suspicious.'], "the barricade"),
-      look(768, 1090, 60, ['Closed. Every road out of town is closed.'], "the barricade"),
+      look(768, 1426, 60, ['Closed. Every road out of town is closed.'], "the barricade"),
+      door(330, 1400, 'mart', 'door', 'Enter', async w => {
+        if (f('workout')) return true;
+        await w.say(['BHATIA SUPER MART. Open 24 hours.', 'Mohit waves at the door sensor. Nothing happens.']);
+        await w.say(M('...Gym first, apparently.'));
+        return false;
+      }),
       look(1250, 540, 54, ["Bus stop. The board says the next bus is 'Delayed'.", 'It always says that.'], "the bus stop bench"),
       look(470, 640, 50, ['An auto, parked with the meter still down.', 'No driver. No "Bhaiya, chaloge?" Nothing.'], "the auto's back seat"),
       look(920, 790, 56, ['The chai tapri. The kettle is still warm.', 'Ten rupees a cup, and nobody to sell it.'], "the chai tapri"),
@@ -320,7 +457,10 @@ export const MAPS: Record<MapName, MapDef> = {
     target: () => !f('cityIntro') ? null
       : !f('gymSearched') ? [1056, 400]
       : !f('cafe') ? [336, 880]
-      : f('fed') && !f('ch1Done') ? [1440, 520] : null,
+      : !f('fed') ? null
+      : !f('workout') ? [1056, 400]
+      : !f('mart') ? [330, 1300]
+      : !f('home') ? [336, 400] : null,
     setup(w) {
       const bag = w.add.image(-40, 560, 'pix-plasticbag').setScale(ART).setDepth(600);
       const roll = () => {
@@ -365,7 +505,10 @@ export const MAPS: Record<MapName, MapDef> = {
       door(264, 372, 'city', 'gym', 'Go out')
     ],
     async enter(w) {
-      if (f('gym')) return;
+      if (f('gym')) {
+        if (f('fed') && !f('workout')) await workoutTime(w);
+        return;
+      }
       await w.wait(300);
       await w.say(['The gym is empty.', 'The music is still playing. To nobody.']);
       await w.say(M('Hm. Maybe someone left something behind.'));
@@ -460,6 +603,47 @@ export const MAPS: Record<MapName, MapDef> = {
         w.extra.triggered = true;
         w.cutscene(() => confront(w));
       }
+    }
+  },
+
+  mart: {
+    tiles: ['VVVVVVVVVVVVV', 'VVVVVVVVVVVVV', ...Array.from({ length: 8 }, () => 'vvvvvvvvvvvvv')],
+    wall: 92, indoor: true, ambient: 'hum',
+    cart: () => f('cart'),
+    hints: () => !f('mart'),
+    target: () => !f('cart') ? null : !f('mFood') ? [312, 210] : !f('mToys') ? [474, 210] : !f('mart') ? [110, 330] : [312, 420],
+    decorate(p) { p.r(92, 152, 24, 8, '#3f9a5a').box(91, 151, 26, 10, INK); },
+    props: [
+      { key: 'fridgeCoke', x: 60, y: 142 }, { key: 'fridgeCoke', x: 150, y: 142 }, { key: 'techcase', x: 500, y: 150 },
+      { key: 'aisleSnack', x: 150, y: 290 }, { key: 'aisleCat', x: 312, y: 290 }, { key: 'aisleToys', x: 474, y: 290 },
+      { key: 'checkout', x: 110, y: 420 }, { key: 'plant', x: 596, y: 430 }
+    ],
+    lights: [[160, 40, '#f4fbff', 150], [460, 40, '#f4fbff', 150]],
+    spawns: { door: [312, 424] },
+    spots: [
+      at(150, 316, 56, grab('mSnack', ['Maggi. Six packets of Maggi.', 'And chips. And one more Maggi, for emergencies.'], 'The trolley has enough Maggi. (There is no such thing as enough Maggi.)', 'the chips')),
+      at(105, 166, 70, grab('mCoke', ['A whole fridge of Coke Zero.', M('Zero sugar. Zero people. Zero judgement.'), 'Mohit takes a crate.'], 'Still cold. Still zero.', 'the cold fridge')),
+      at(452, 172, 46, grab('mGpu', ['A glass case full of graphics cards.', 'The price tag says:', PFFT, M('Watch me.'), 'Mohit takes the biggest one. The box is bigger than PoiPoi.'], 'One is enough. Probably.', 'the GPU boxes')),
+      at(552, 172, 46, grab('mRam', ['RAM sticks. 64 GB. With RGB lights.', 'Same price tag:', PFFT, M('Chrome is finally going to be happy.'), 'Into the trolley.'], 'The RGB is still blinking at him.', 'the blinking RAM')),
+      at(312, 316, 56, grab('mFood', ['The cat food aisle.', 'Chicken. Tuna. Salmon pâté. Little pouches called "Gravy Lovers".', 'Mohit sweeps the whole shelf into the trolley.'], 'There is no cat food left on this shelf. It is all in the trolley.', 'the cat food', async w => {
+        if (w.poi && !w.poi.distracted) { w.emote(w.poi.sprite, '♥', '#ff4f8b', 60); sfx.meow(true); }
+      })),
+      at(474, 316, 56, grab('mToys', ['Feather wands. Crinkle balls. A toy mouse. A scratching post.', M('He needs all of them.'), 'He does not need all of them.', 'Mohit takes all of them.'], 'The toy shelf is empty now.', 'the feather wands')),
+      { x: 110, y: 444, r: 60, label: 'Pay', name: 'the till', run: checkout },
+      door(312, 456, 'city', 'mart', 'Go out', async w => {
+        if (f('mart') || !ITEMS.some(f)) return true;
+        await w.say(M("I can't just walk out without paying. Even if nobody's here."));
+        return false;
+      })
+    ],
+    async enter(w) {
+      if (f('cart')) return;
+      await w.wait(300);
+      await w.say(['The automatic doors slide open. *ding*', 'Nobody inside either.', 'The music is still on: an instrumental version of a song from 2009.']);
+      await w.say(M('Okay. Trolley.'));
+      state.set('cart');
+      w.addCart();
+      ui.objective(objectiveText());
     }
   }
 };

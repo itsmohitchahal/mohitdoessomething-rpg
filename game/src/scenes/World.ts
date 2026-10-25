@@ -3,12 +3,14 @@ import { ART } from '../px/scale';
 import { PIX } from '../px/props';
 import { Px } from '../px/paint';
 import { paintGround } from '../px/terrain';
-import { MAPS, objectiveText, mapSize, type MapDef, type Spot } from '../maps';
+import { MAPS, objectiveText, mapSize, cartLevel, type MapDef, type Spot, type PoiSpot } from '../maps';
 import { state, hazeLevel, type MapName } from '../state';
 import { clock, grade, fmt, isNight, isRainDay } from '../daytime';
 import { input } from '../input';
 import { ui, type Line } from '../ui';
 import { sfx } from '../audio';
+import { Roamers } from '../roamers';
+import type { FightResult } from './Fight';
 
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
 // walking speed, rising to a jog after ~0.7s of continuous movement
@@ -24,6 +26,9 @@ type Light = { img: Phaser.GameObjects.Image; kind: 'night' | 'indoor'; base: nu
 class Follower {
   sprite: Sprite;
   distracted = false;
+  home: PoiSpot[] | null = null;
+  depth: number | null = null;
+  private last = -1;
   private nextDistract: number;
   private hint?: Phaser.GameObjects.Image;
 
@@ -35,7 +40,8 @@ class Follower {
 
   update(dt: number, partyMoving: boolean) {
     const s = this.sprite;
-    s.setDepth(s.y);
+    s.setDepth(this.depth ?? s.y);
+    if (this.home) return;
     if (this.distracted) {
       this.hint?.setPosition(s.x, s.y - 54 + Math.sin(this.w.time.now / 160) * 3);
       return;
@@ -78,6 +84,91 @@ class Follower {
     this.hint = this.w.add.image(tx, ty - 54, 'pix-spark').setScale(ART).setDepth(26000);
     ui.toast(`PoiPoi got distracted by ${name}.<small>Go back and call him when you're ready.</small>`, 3400);
     sfx.meow(true);
+  }
+
+  /** At home PoiPoi stops following and potters about the room on his own. */
+  goHome(spots: PoiSpot[]) {
+    this.home = spots;
+    this.distracted = false;
+    this.hint?.destroy(); this.hint = undefined;
+    this.w.time.delayedCall(Phaser.Math.Between(1200, 2600), () => this.potter());
+  }
+
+  private async potter() {
+    const w = this.w, s = this.sprite;
+    if (!this.home || !s.active) return;
+    let i = Phaser.Math.Between(0, this.home.length - 1);
+    if (i === this.last) i = (i + 1) % this.home.length;
+    this.last = i;
+    const spot = this.home[i];
+    this.depth = null;
+    await w.walk(s, spot.x, spot.y, 85);
+    if (!this.home || !s.active) return;
+    this.depth = spot.depth ?? null;
+    this.act(spot);
+    w.time.delayedCall(Phaser.Math.Between(4500, 9000), () => this.potter());
+  }
+
+  private act(spot: PoiSpot) {
+    const w = this.w, s = this.sprite;
+    switch (spot.act) {
+      case 'box':
+        s.play('p-loaf');
+        if (Math.random() < 0.5) w.float(s.x, s.y - 50, 'pix-heart', 1);
+        break;
+      case 'nap':
+        s.play('p-loaf');
+        w.emote(s, 'z', '#ffffff', 56);
+        break;
+      case 'bat': {
+        const toy = w.extra['toy-' + spot.toy] as Phaser.GameObjects.Image | undefined;
+        const bx = (toy?.getData('bx') as number | undefined) ?? toy?.x ?? 0;
+        toy?.setData('bx', bx);
+        for (let k = 0; k < 3; k++) w.time.delayedCall(k * 420, () => {
+          if (!s.active) return;
+          sfx.rustle();
+          w.tweens.add({ targets: s, y: spot.y - 12, duration: 150, yoyo: true, ease: 'Quad.easeOut' });
+          if (toy?.active) w.tweens.add({ targets: toy, x: Phaser.Math.Clamp(toy.x + Phaser.Math.Between(-14, 14), bx - 28, bx + 28), angle: Phaser.Math.Between(-40, 40), duration: 220 });
+        });
+        break;
+      }
+      case 'scratch':
+        s.play('p-walk');
+        sfx.rustle();
+        w.tweens.add({ targets: s, x: spot.x + 3, duration: 90, yoyo: true, repeat: 7, onComplete: () => { if (s.active) s.play('p-idle'); } });
+        w.emote(s, '!!', '#ffc23c', 60);
+        break;
+      case 'piano':
+        s.play('p-loaf');
+        sfx.piano();
+        w.emote(s, '♪', '#ffc23c', 60);
+        break;
+      case 'guitar':
+        sfx.strum();
+        w.emote(s, '♪', '#ffc23c', 60);
+        break;
+      case 'laptop':
+        s.play('p-loaf');
+        for (let k = 0; k < 5; k++) w.time.delayedCall(k * 90, () => sfx.blip());
+        w.emote(s, 'fffffffff', '#ffffff', 60);
+        break;
+      case 'window':
+        s.stop(); s.setFrame('stare');
+        w.emote(s, '!', '#ffc23c', 60);
+        break;
+    }
+    if (Math.random() < 0.25) sfx.meow(true);
+  }
+
+  async pet() {
+    const w = this.w, s = this.sprite;
+    sfx.heart();
+    w.float(s.x, s.y - 50, 'pix-heart', 1.2);
+    s.play('p-loaf');
+    await w.say(Phaser.Utils.Array.GetRandom([
+      'PoiPoi purrs like a tiny scooter.', 'PoiPoi slow-blinks at Mohit.', "PoiPoi headbutts Mohit's hand. More, apparently.",
+      'PoiPoi rolls over. This is a trap. Mohit knows it is a trap.', 'PoiPoi grooms Mohit\'s hand. Thoroughly.'
+    ]));
   }
 
   rejoin() {
@@ -123,13 +214,15 @@ export class World extends Phaser.Scene {
   private rainK = 0;
   private drops: Phaser.GameObjects.Image[] = [];
   private rainRect!: Phaser.GameObjects.Rectangle;
+  private roamers: Roamers | null = null;
+  cart: Sprite | null = null;
 
   constructor() { super('World'); }
 
   init(data: { map: MapName; spawn: string }) {
     this.mapName = data.map; this.spawn = data.spawn; this.gen++;
     this.poi = null; this.trail = []; this.locked = false; this.followPaused = false; this.leaving = false; this.extra = {};
-    this.hintObjs = []; this.lamps = []; this.drops = []; this.rainK = 0; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
+    this.hintObjs = []; this.lamps = []; this.drops = []; this.rainK = 0; this.roamers = null; this.cart = null; this.facing = 'down'; this.moveT = 0; this.lead = { x: 0, y: 0, tx: 0, ty: 0 };
   }
 
   create() {
@@ -170,6 +263,7 @@ export class World extends Phaser.Scene {
     this.trail = [{ x: sx, y: sy }];
 
     if (state.flag('fed') && m.poiAllowed !== false) this.addPoi(sx - 34, sy + 2);
+    if (m.cart?.()) this.addCart();
 
     this.marker = this.add.text(0, 0, '!', {
       fontFamily: '"Pixelify Sans", monospace', fontSize: '24px', color: '#ffffff', stroke: '#2b2430', strokeThickness: 6
@@ -199,6 +293,8 @@ export class World extends Phaser.Scene {
     state.data.map = this.mapName; state.data.spawn = this.spawn; state.save();
 
     m.setup?.(this);
+    // if (m.roam && state.flag('metPoi')) this.roamers = new Roamers(this, m.roam, m.walks ?? []);
+    if (this.poi && m.poiSpots && state.flag('home')) this.poi.goHome(m.poiSpots);
     if (m.hints?.()) this.showHints();
     this.updateLight();
     if (m.enter) this.cutscene(() => m.enter!(this));
@@ -288,6 +384,27 @@ export class World extends Phaser.Scene {
     return img;
   }
 
+  /** The shopping trolley, pushed in front of Mohit. */
+  addCart() {
+    const p = this.player;
+    this.cart = this.add.sprite(p.x, p.y + 34, 'cart', 'c' + cartLevel()).setOrigin(0.5, 0.9).setScale(ART);
+  }
+  dropCart() {
+    const c = this.cart;
+    if (!c) return;
+    this.cart = null;
+    this.tweens.add({ targets: c, alpha: 0, duration: 400, onComplete: () => c.destroy() });
+  }
+  private updateCart(dt: number) {
+    const c = this.cart;
+    if (!c) return;
+    const p = this.player, f = this.facing;
+    const [ox, oy] = f === 'up' ? [0, -18] : f === 'side' ? [p.flipX ? -46 : 46, 4] : [0, 34];
+    const k = Math.min(1, dt * 14);
+    c.x += (p.x + ox - c.x) * k; c.y += (p.y + oy - c.y) * k;
+    c.setFlipX(f === 'side' && p.flipX).setDepth(c.y).setFrame('c' + cartLevel());
+  }
+
   addPoi(x: number, y: number) {
     this.poi = new Follower(this, x, y);
     return this.poi;
@@ -329,7 +446,9 @@ export class World extends Phaser.Scene {
       if (this.trail.length > 240) this.trail.shift();
     }
     this.poi?.update(dt, moving);
+    this.updateCart(dt);
     this.def.update?.(this, dt);
+    this.roamers?.update(dt, free);
     this.updateTarget();
     this.updateLight();
     this.updateRain(dt);
@@ -341,7 +460,7 @@ export class World extends Phaser.Scene {
       if (input.consumeA()) this.cutscene(async () => {
         await near.run(this);
         const poi = this.poi;
-        if (!near.door && poi && !poi.distracted && !this.followPaused && !this.leaving && state.flag('fed') && Math.random() < POI_DISTRACT_CHANCE) {
+        if (!near.door && poi && !poi.distracted && !poi.home && !this.followPaused && !this.leaving && state.flag('fed') && Math.random() < POI_DISTRACT_CHANCE) {
           poi.distractBy(near.x, near.y, near.name ?? 'something');
         }
       });
@@ -410,6 +529,9 @@ export class World extends Phaser.Scene {
     if (poi?.distracted) {
       const d = Phaser.Math.Distance.Between(p.x, p.y, poi.sprite.x, poi.sprite.y);
       if (d < 64) { best = { x: poi.sprite.x, y: poi.sprite.y, r: 64, label: 'Call', door: true, run: async () => poi.rejoin() }; bd = d; }
+    } else if (poi?.home) {
+      const d = Phaser.Math.Distance.Between(p.x, p.y, poi.sprite.x, poi.sprite.y);
+      if (d < 60) { best = { x: poi.sprite.x, y: poi.sprite.y, r: 60, label: 'Pet', door: true, run: () => poi.pet() }; bd = d; }
     }
     for (const s of this.def.spots) {
       if (s.when && !s.when(this)) continue;
@@ -434,6 +556,7 @@ export class World extends Phaser.Scene {
 
   say(lines: Line[] | Line) { return ui.say(lines); }
   wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(ms, r)); }
+  tween(cfg: Phaser.Types.Tweens.TweenBuilderConfig) { return new Promise<void>(r => this.tweens.add({ ...cfg, onComplete: () => r() })); }
 
   walk(s: Sprite, x: number, y: number, speed = 130, walkAnim?: string, idleAnim?: string) {
     const d = Phaser.Math.Distance.Between(s.x, s.y, x, y);
@@ -475,13 +598,14 @@ export class World extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart({ map, spawn }));
   }
 
-  /** Runs the battle scene on top of this one and waits for its result. */
-  battle(): Promise<string> {
+  /** Runs a battle on top of this one and waits for its result: the kitchen bag, or a monster by id. */
+  battle(foe?: string): Promise<string | FightResult> {
     return new Promise(resolve => {
       const hud = document.querySelector('#hud') as HTMLElement;
       hud.hidden = true;
       this.scene.pause();
-      this.scene.launch('Battle', {
+      this.scene.launch(foe ? 'Fight' : 'Battle', {
+        foe,
         done: (r: string) => { hud.hidden = false; this.scene.resume(); resolve(r); }
       });
     });

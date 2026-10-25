@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { Px, rng } from '../px/paint';
 import { MOHIT_FRAMES, MOHIT_FW, MOHIT_FH, catFrames, POI_LOOK, CAT_FW, CAT_FH, bagFrame } from '../px/sprites';
-import { PIX } from '../px/props';
+import { PIX, cartFrame } from '../px/props';
+import { MONSTERS, MON_W, MON_H } from '../px/monsters';
+import { NPCS, npcFrames } from '../px/people';
 import { ui } from '../ui';
 
 const hash = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
@@ -42,6 +44,12 @@ export class Boot extends Phaser.Scene {
     sheet(this, 'mohit', MOHIT_FRAMES, MOHIT_FW, MOHIT_FH);
     sheet(this, 'poi', catFrames(POI_LOOK), CAT_FW, CAT_FH);
     sheet(this, 'bag', { idle: () => bagFrame(), squash: () => bagFrame({ squash: true }), eyes: () => bagFrame({ eyes: true }), eyesEar: () => bagFrame({ eyes: true, ear: true }) }, 26, 30);
+    sheet(this, 'cart', { c0: () => cartFrame(0), c1: () => cartFrame(1), c2: () => cartFrame(2), c3: () => cartFrame(3) }, 24, 20);
+    for (const m of MONSTERS) {
+      const frame = (f: 0 | 1) => () => { const p = new Px(MON_W, MON_H); m.draw(p, f); return p; };
+      sheet(this, 'mon-' + m.id, { a: frame(0), b: frame(1) }, MON_W, MON_H);
+    }
+    for (const n of NPCS) sheet(this, 'npc-' + n.id, npcFrames(n), MOHIT_FW, MOHIT_FH);
     for (const [k, prop] of Object.entries(PIX)) {
       const p = new Px(prop.w, prop.h, rng(hash(k)));
       prop.draw(p);
@@ -74,6 +82,13 @@ export class Boot extends Phaser.Scene {
     this.anims.create({ key: 'p-walk', repeat: -1, frameRate: 9, frames: ['walk0', 'walk1', 'walk2', 'walk1'].map(f => fr('poi', f)) });
     this.anims.create({ key: 'p-loaf', repeat: -1, frames: [fr('poi', 'loaf', 2400), fr('poi', 'loafBlink', 140)] });
     this.anims.create({ key: 'p-eat', repeat: -1, frameRate: 5, frames: [fr('poi', 'eat'), fr('poi', 'eat2')] });
+    for (const m of MONSTERS) this.anims.create({ key: 'mon-' + m.id, repeat: -1, frameRate: 3, frames: ['a', 'b'].map(f => fr('mon-' + m.id, f)) });
+    for (const n of NPCS) {
+      const k = 'npc-' + n.id;
+      this.anims.create({ key: k + '-down', repeat: -1, frameRate: 6, frames: ['walkA', 'idle', 'walkB', 'idle'].map(f => fr(k, f)) });
+      this.anims.create({ key: k + '-up', repeat: -1, frameRate: 6, frames: ['bWalkA', 'bIdle', 'bWalkB', 'bIdle'].map(f => fr(k, f)) });
+      this.anims.create({ key: k + '-side', repeat: -1, frameRate: 6, frames: ['sWalkA', 'sIdle', 'sWalkB', 'sIdle'].map(f => fr(k, f)) });
+    }
     this.game.events.emit('booted');
   }
 }

@@ -40,6 +40,37 @@ function signBoard(p: Px, x: number, y: number, w: number, h: number, bg: string
   p.text(text, x + Math.floor((w - Px.textWidth(text)) / 2), y + Math.floor((h - 5) / 2), fg);
 }
 
+/** A free-standing supermarket shelf with a header sign and three rows of goods. */
+function aisle(p: Px, label: string, goods: (x: number, y: number, i: number) => void) {
+  p.shadow(18, 34, 17, 2);
+  p.block(1, 7, 34, 27, ['#f4f6f9', '#d9dde3', '#b4bac4', '#8a909b']);
+  for (const y of [10, 18, 26]) {
+    p.r(3, y, 30, 7, '#cfd4db');
+    for (let i = 0; i < 7; i++) goods(4 + i * 4, y, i + y);
+    p.r(3, y + 6, 30, 1, '#8a909b').r(3, y + 7, 30, 1, '#ffe08a');
+  }
+  p.r(2, 0, 32, 7, '#3f9a5a').box(1, 0, 34, 7, INK);
+  p.text(label, 18 - Math.floor(Px.textWidth(label) / 2), 1, '#ffffff');
+  p.box(0, 6, 36, 29, INK);
+}
+
+/** The shopping trolley, filling up: 0 empty .. 3 overflowing. */
+export function cartFrame(n: number) {
+  const p = new Px(24, 20);
+  p.shadow(12, 18, 11, 2);
+  p.r(3, 5, 18, 8, '#7a808c');
+  if (n >= 1) p.r(5, 8, 5, 5, '#ffb347').p(7, 10, '#2b2430').r(11, 9, 4, 4, '#e04c80').r(11, 9, 4, 1, C.steel[1]);
+  if (n >= 2) p.r(15, 5, 5, 8, '#2b2430').r(15, 7, 5, 1, '#7ec96b').r(4, 5, 4, 4, '#5bb6ff');
+  if (n >= 3) p.r(5, 1, 5, 5, '#ffa3c4').p(6, 3, '#2b2430').r(11, 2, 4, 4, '#e04c50').line(17, 4, 20, 0, C.wood[1]).p(20, 0, '#ff7ab0').p(21, 1, '#ffe08a').r(9, 4, 6, 2, '#1f1b24');
+  for (let x = 3; x <= 21; x += 3) p.r(x, 5, 1, 9, C.steel[1]);
+  p.r(2, 5, 20, 1, C.steel[0]).r(3, 13, 18, 1, C.steel[2]).r(3, 9, 18, 1, mix(C.steel[1], '#7a808c', 0.4));
+  p.r(1, 3, 22, 1, '#e04c50').r(1, 3, 1, 3, C.steel[2]).r(22, 3, 1, 3, C.steel[2]);
+  p.r(4, 14, 16, 1, C.steel[2]);
+  p.outline();
+  p.r(4, 16, 2, 2, INK).r(18, 16, 2, 2, INK);
+  return p;
+}
+
 export const PIX: Record<string, PixProp> = {
   /* ------------------------------ city ------------------------------ */
   apt: {
@@ -648,6 +679,172 @@ export const PIX: Record<string, PixProp> = {
     draw(p) {
       p.r(2, 4, 12, 15, '#f4ede0').r(11, 5, 3, 14, '#e2d6c2').r(4, 1, 8, 3, '#e2d6c2').r(5, 3, 6, 1, '#c0392b');
       p.r(3, 9, 10, 5, '#c0392b').text('ATTA', 3, 9, '#ffffff');
+      p.outline();
+    }
+  },
+  /* ------------------------------ supermarket ------------------------------ */
+  mart: {
+    w: 140, h: 100, foot: [-66, -20, 132, 18], glow: [[70, 15, '#fff1c9'], [28, 46, '#ffe7a8'], [112, 46, '#ffe7a8']],
+    draw(p) {
+      const wall = ['#f4f1e8', '#e4dfd2', '#c9c2b1', '#9d9584'];
+      p.shadow(70, 97, 68, 3);
+      p.block(4, 18, 132, 80, wall);
+      p.speck(5, 19, 130, 78, '#ece8dc', 0.05);
+      stains(p, 6, 26, 128, 10, dk(wall[1], 0.12), 6);
+      p.r(2, 7, 136, 15, '#3f9a5a').r(2, 7, 136, 2, '#5cb877').r(2, 20, 136, 2, '#2c7342').box(1, 6, 138, 17, INK);
+      p.r(2, 23, 136, 2, '#f2a33a').r(2, 25, 136, 1, dk('#f2a33a', 0.3));
+      p.disc(11, 14, 4, '#f2a33a').r(9, 13, 4, 2, '#ffffff').p(9, 16, '#ffffff').p(12, 16, '#ffffff');
+      p.text('BHATIA SUPER MART', 70 - Math.floor(Px.textWidth('BHATIA SUPER MART') / 2), 12, '#ffffff');
+      const win = (x: number, w: number) => {
+        p.r(x, 32, w, 30, '#a9cfe0');
+        for (const y of [36, 44, 52]) {
+          p.r(x + 1, y + 5, w - 2, 1, '#6f8fa3');
+          for (let i = x + 2; i < x + w - 3; i += 4) p.r(i, y + 1 + (i % 3 ? 1 : 0), 3, 4 - (i % 3 ? 1 : 0), ['#e04c80', '#ffb347', '#5bb6ff', '#7ec96b', '#ffe08a'][(i + y) % 5]);
+        }
+        p.line(x + 6, 32, x + 1, 44, '#d8edf6').line(x + 12, 32, x + 3, 50, '#d8edf6');
+        p.box(x - 1, 31, w + 2, 32, INK).r(x - 2, 63, w + 4, 2, wall[2]);
+      };
+      win(8, 40); win(92, 40);
+      p.r(11, 35, 17, 9, '#e04c50').box(10, 34, 19, 11, INK).text('SALE', 12, 37, '#ffffff');
+      p.r(108, 35, 21, 14, '#ffe08a').box(107, 34, 23, 16, INK).text('CAT', 113, 37, INK).text('FOOD', 111, 43, C.pink[2]);
+      p.r(52, 34, 36, 62, '#bcd8e6').box(51, 33, 38, 64, INK);
+      p.r(69, 34, 2, 62, '#7f9cbc').line(56, 40, 54, 52, '#e4f2f8').line(76, 40, 74, 52, '#e4f2f8');
+      p.r(60, 60, 4, 1, C.steel[1]).r(76, 60, 4, 1, C.steel[1]);
+      p.r(63, 29, 14, 3, '#3b3240').p(70, 30, '#ff4f5e');
+      p.r(54, 92, 32, 3, '#3f9a5a');
+      for (let k = 0; k < 3; k++) {
+        const x = 10 + k * 5;
+        p.r(x, 74, 22, 12, k === 2 ? C.steel[1] : C.steel[2]);
+        for (let i = x + 2; i < x + 22; i += 3) p.r(i, 74, 1, 12, C.steel[3]);
+        p.r(x, 73, 22, 1, '#e04c50').p(x + 3, 88, INK).p(x + 18, 88, INK);
+      }
+      p.box(9, 72, 34, 15, INK);
+      p.r(100, 70, 28, 18, '#2f3a2f').box(99, 69, 30, 20, C.wood[2]).text('OPEN', 106, 73, '#7ef0a0').text('24 HRS', 102, 80, '#ffe08a');
+      p.r(2, 96, 136, 3, CONCRETE[1]).box(1, 95, 138, 5, INK);
+    }
+  },
+  aisleSnack: { w: 36, h: 36, foot: [-17, -10, 34, 9], draw: p => aisle(p, 'SNACKS', (x, y, i) => p.r(x, y + 1, 3, 5, ['#e04c50', '#ffd23c', '#5bb6ff', '#ff8a3c', '#7ec96b'][i % 5]).p(x + 1, y + 2, '#ffffff')) },
+  aisleCat: {
+    w: 36, h: 36, foot: [-17, -10, 34, 9],
+    draw: p => aisle(p, 'CAT FOOD', (x, y, i) => i % 2
+      ? p.r(x, y + 2, 3, 4, ['#e04c80', '#5bb6ff', '#ffb347'][i % 3]).r(x, y + 2, 3, 1, C.steel[1]).p(x + 1, y + 4, '#ffffff')
+      : p.r(x, y, 3, 6, ['#ffb347', '#a5d8d0', '#ffa3c4'][i % 3]).p(x + 1, y + 2, '#2b2430').p(x, y + 1, '#ffffff'))
+  },
+  aisleToys: {
+    w: 36, h: 36, foot: [-17, -10, 34, 9],
+    draw: p => aisle(p, 'TOYS', (x, y, i) => i % 3 === 0
+      ? p.line(x + 1, y + 6, x + 1, y, C.wood[1]).p(x, y, '#ff7ab0').p(x + 2, y, '#ffe08a').p(x + 1, y - 1, '#ff7ab0')
+      : i % 3 === 1 ? p.r(x, y + 3, 3, 3, ['#e04c50', '#5bb6ff', '#7ec96b'][i % 3]).p(x, y + 3, '#ffffff')
+        : p.r(x, y + 3, 3, 2, '#a69eb0').p(x + 3, y + 4, '#f2b6c4').p(x, y + 3, '#f2b6c4'))
+  },
+  fridgeCoke: {
+    w: 28, h: 40, foot: [-13, -8, 26, 7], glow: [[14, 20, '#d8f0ff']],
+    draw(p) {
+      p.shadow(14, 38, 13, 2);
+      p.block(1, 1, 26, 37, ['#f4f6f9', '#d9dde3', '#b4bac4', '#8a909b']);
+      p.r(1, 1, 26, 6, '#e04c50').box(0, 0, 28, 8, INK).text('COLD', 6, 2, '#ffffff');
+      p.r(3, 9, 22, 26, '#cfe6f4');
+      for (const y of [10, 18, 26]) {
+        for (let x = 4; x < 24; x += 3) p.r(x, y + 1, 2, 6, '#1f1b24').p(x, y + 3, '#e04c50').p(x + 1, y + 3, '#e04c50').p(x, y + 1, '#5a5262');
+        p.r(3, y + 7, 22, 1, '#9aaab8');
+      }
+      p.line(5, 9, 3, 16, '#ffffff').line(10, 9, 5, 20, '#eef7fc');
+      p.box(2, 8, 24, 28, INK).r(23, 18, 1, 8, C.steel[3]);
+    }
+  },
+  techcase: {
+    w: 62, h: 32, foot: [-29, -10, 58, 9],
+    draw(p) {
+      p.shadow(31, 30, 30, 2);
+      p.block(1, 14, 60, 16, ['#5a5262', '#3b3240', '#29222e', '#1a1520']);
+      p.r(2, 6, 58, 9, '#bcd8e6').box(1, 5, 60, 11, INK);
+      for (let i = 0; i < 3; i++) {
+        const x = 4 + i * 9;
+        p.r(x, 7, 8, 7, '#2b2430').r(x, 9, 8, 1, '#7ec96b').r(x + 1, 11, 3, 1, '#ffffff').box(x - 1, 6, 10, 9, INK);
+      }
+      for (let i = 0; i < 4; i++) {
+        const x = 34 + i * 6;
+        p.r(x, 8, 4, 6, '#2f7a3f').r(x + 1, 9, 2, 1, '#1f1b24').r(x + 1, 11, 2, 1, '#1f1b24').p(x, 8, ['#ff4f8b', '#ffe08a', '#5bb6ff', '#7ef0a0'][i]);
+      }
+      p.line(6, 6, 3, 14, '#e4f2f8').line(40, 6, 37, 14, '#e4f2f8');
+      p.r(18, 16, 26, 10, '#ffe08a').box(17, 15, 28, 12, INK).text('PFFT', 23, 18, C.pink[2]);
+      p.r(2, 0, 20, 6, '#3b3240').box(1, 0, 22, 6, INK).text('TECH', 4, 1, '#7ef0a0');
+    }
+  },
+  checkout: {
+    w: 46, h: 30, foot: [-21, -10, 42, 9],
+    draw(p) {
+      p.shadow(23, 28, 22, 2);
+      p.block(1, 12, 44, 16, ['#f4f1e8', '#e4dfd2', '#c9c2b1', '#9d9584']);
+      p.r(2, 9, 30, 4, '#2b2430');
+      for (let x = 3; x < 31; x += 3) p.p(x, 10, '#4a4452');
+      p.r(34, 4, 9, 8, '#3b3240').r(35, 5, 7, 4, '#7ef0a0').text('1', 37, 5, '#1f3a2a').box(33, 3, 11, 10, INK);
+      p.r(26, 6, 4, 3, '#2b2430').p(27, 7, '#ff4f5e');
+      p.r(6, 18, 22, 6, '#3f9a5a').text('TILL', 9, 19, '#ffffff');
+      p.outline();
+    }
+  },
+  /* ------------------------------ PoiPoi's things ------------------------------ */
+  gpubox: {
+    w: 26, h: 20,
+    draw(p) {
+      p.shadow(13, 18, 12, 2);
+      p.r(4, 0, 18, 4, '#c9965a').r(4, 0, 18, 1, '#e4b878');
+      p.line(1, 3, 4, 6, '#b5803f').line(24, 3, 21, 6, '#b5803f');
+      p.r(3, 4, 20, 6, '#6e4a2c').r(3, 4, 20, 1, '#523620');
+      p.r(2, 9, 22, 9, '#d8a868');
+      p.outline();
+    }
+  },
+  gpuboxFront: {
+    w: 26, h: 20,
+    draw(p) {
+      p.r(2, 9, 22, 10, '#d8a868').r(2, 9, 22, 1, '#ecc48a').r(19, 10, 5, 9, '#c4914f');
+      p.text('GPU', 6, 12, '#2b2430').r(2, 17, 22, 1, '#3f9a5a');
+      p.box(1, 8, 24, 12, INK);
+    }
+  },
+  scratcher: {
+    w: 16, h: 30, foot: [-6, -4, 12, 3],
+    draw(p) {
+      p.shadow(8, 28, 7, 2);
+      p.block(1, 24, 14, 4, C.wood);
+      for (let y = 6; y < 24; y++) p.r(6, y, 4, 1, y % 2 ? '#d8b27a' : '#c49a5e');
+      p.block(2, 2, 12, 4, ['#ffd1e1', '#ffa3c4', '#e07aa0']);
+      p.line(12, 6, 12, 13, '#8a8792').disc(12, 15, 2, '#ffe08a');
+      p.outline();
+    }
+  },
+  yarn: {
+    w: 12, h: 9,
+    draw(p) {
+      p.disc(5, 4, 4, '#e04c50').line(2, 2, 7, 7, '#ff8a8a').line(3, 1, 8, 5, '#ff8a8a').p(4, 2, '#ffb3b3');
+      p.outline();
+      p.line(8, 7, 11, 8, '#e04c50');
+    }
+  },
+  wand: {
+    w: 20, h: 10,
+    draw(p) {
+      p.line(1, 8, 13, 4, C.wood[1]);
+      p.r(13, 2, 3, 3, '#ff7ab0').r(15, 1, 3, 2, '#ffe08a').r(15, 4, 3, 2, '#7ec96b').p(18, 2, '#ff7ab0');
+      p.outline();
+    }
+  },
+  toymouse: {
+    w: 11, h: 7,
+    draw(p) {
+      p.ell(4, 4, 3, 2, '#a69eb0').p(2, 2, '#f2b6c4').p(6, 3, INK);
+      p.outline();
+      p.line(8, 5, 10, 6, '#f2b6c4');
+    }
+  },
+  foodstack: {
+    w: 20, h: 18, foot: [-8, -4, 16, 3],
+    draw(p) {
+      p.shadow(10, 16, 9, 2);
+      p.r(2, 6, 7, 10, '#ffb347').p(4, 9, '#2b2430').p(6, 9, '#2b2430').p(5, 11, '#e04c80');
+      for (const [x, y, c] of [[10, 12, '#e04c80'], [14, 12, '#5bb6ff'], [12, 8, '#e04c80']] as [number, number, string][]) p.r(x, y, 4, 4, c).r(x, y, 4, 1, C.steel[1]);
       p.outline();
     }
   },

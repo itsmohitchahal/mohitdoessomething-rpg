@@ -151,7 +151,7 @@ export const ui = new UI();
 
 // Hinglish words: tap (or hover) to see the English meaning.
 document.addEventListener('click', e => {
-  const h = (e.target as HTMLElement).closest('#gdialog .hi, #overlay .hi');
+  const h = (e.target as HTMLElement).closest('#gdialog .hi, #overlay .hi, #workout .hi');
   if (!h) return;
   e.stopPropagation();
   h.classList.toggle('open');
